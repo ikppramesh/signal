@@ -64,7 +64,13 @@ button:focus-visible{outline:3px solid var(--c);outline-offset:2px}
 .useGrid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:16px}
 .useRow{display:flex;align-items:baseline;gap:8px;margin-top:4px}
 .useRow span{font-size:22px;font-weight:900;color:#8b7cf6}
-.useRow.up span{color:#4ade80}
+.useRow.up span{color:#f05a5a}
+.chartLabel{font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--dim);margin-top:22px}
+.lineWrap{position:relative;margin-top:8px}
+#useLine{display:block;width:100%;height:200px;touch-action:pan-y}
+#useLine text{fill:var(--dim);font-size:11px;font-family:inherit}
+.tip{position:absolute;top:0;pointer-events:none;padding:8px 10px;border-radius:10px;background:#fff;color:#000;font-size:13px;font-weight:700;white-space:nowrap;transform:translateX(-50%);opacity:0;transition:opacity .15s}
+.tip small{display:block;font-weight:600;color:#555}
 .useRow b{font-size:clamp(28px,8vw,44px);font-weight:900;letter-spacing:-.03em;font-variant-numeric:tabular-nums}
 .bars{display:grid;grid-template-columns:repeat(14,1fr);gap:6px;height:140px;margin-top:20px}
 .bar{display:flex;flex-direction:column;align-items:center;gap:6px;min-width:0}
@@ -203,8 +209,14 @@ button.ghost{width:auto;flex:none;padding:0 22px;margin:0;background:transparent
         <div><div class="label">Today</div><div class="useRow"><span>↓</span><b id="useTodayDown">--</b></div><div class="useRow up"><span>↑</span><b id="useTodayUp">--</b></div></div>
         <div><div class="label" id="useLifeLabel">Lifetime</div><div class="useRow"><span>↓</span><b id="useLifeDown">--</b></div><div class="useRow up"><span>↑</span><b id="useLifeUp">--</b></div></div>
       </div>
+      <div class="chartLabel">Last 24 hours</div>
+      <div class="lineWrap">
+        <svg id="useLine" role="img" aria-label="Download and upload per hour for the last 24 hours"></svg>
+        <div class="tip" id="useTip"></div>
+      </div>
+      <div class="chartLabel">Last 14 days</div>
       <div class="bars" id="useBars" aria-label="Download and upload for the last 14 days"></div>
-      <div class="legend"><span><i style="background:#8b7cf6"></i>Download</span><span><i style="background:#4ade80"></i>Upload</span></div>
+      <div class="legend"><span><i style="background:#8b7cf6"></i>Download</span><span><i style="background:#f05a5a"></i>Upload</span></div>
       <button class="ghost wideBtn" id="usagePermit" hidden>Allow usage access</button>
       <ol class="apps" id="useApps"></ol>
     </div>
@@ -852,12 +864,64 @@ function renderUsage(u) {
   const max = Math.max(1, ...u.days.map((d) => d.down + d.up));
   $('useBars').innerHTML = u.days.map((d) => {
     const day = new Date(d.date + 'T12:00').toLocaleDateString([], { weekday: 'narrow' });
-    return `<div class="bar" title="${d.date}: ↓ ${bytes(d.down)} ↑ ${bytes(d.up)}"><div class="stack"><i style="height:${(d.up / max) * 100}%;background:#4ade80"></i><i style="height:${(d.down / max) * 100}%;background:#8b7cf6"></i></div><small>${day}</small></div>`;
+    return `<div class="bar" title="${d.date}: ↓ ${bytes(d.down)} ↑ ${bytes(d.up)}"><div class="stack"><i style="height:${(d.up / max) * 100}%;background:#f05a5a"></i><i style="height:${(d.down / max) * 100}%;background:#8b7cf6"></i></div><small>${day}</small></div>`;
   }).join('');
+  hourly = u.hours || [];
+  drawHourly();
   $('useApps').innerHTML = (u.apps || []).slice(0, 10).map((a) =>
     `<li><span>${esc(a.name)}</span><small>↓ ${bytes(a.down)} · ↑ ${bytes(a.up)}</small></li>`).join('');
   if (u.apps && u.apps.length) $('useApps').insertAdjacentHTML('afterbegin', '<li class="head">Top apps today</li>');
 }
+
+/* Hourly line chart: purple download, red upload, one shared axis in bytes per hour. */
+const DOWN = '#8b7cf6', UP = '#f05a5a';
+let hourly = [];
+function drawHourly() {
+  const svg = $('useLine'), W = svg.clientWidth, H = 200;
+  if (!W || !hourly.length) return;
+  const pad = { l: 56, r: 10, t: 12, b: 24 }, iw = W - pad.l - pad.r, ih = H - pad.t - pad.b;
+  const max = Math.max(1, ...hourly.map((h) => Math.max(h.down, h.up)));
+  const x = (i) => pad.l + (i / (hourly.length - 1)) * iw;
+  const y = (v) => pad.t + ih - (v / max) * ih;
+  const path = (k) => hourly.map((h, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(h[k]).toFixed(1)}`).join('');
+  const grid = [0, 0.5, 1].map((f) => `<line x1="${pad.l}" x2="${W - pad.r}" y1="${y(max * f)}" y2="${y(max * f)}" stroke="rgba(255,255,255,.08)"/>
+    <text x="${pad.l - 8}" y="${y(max * f) + 4}" text-anchor="end">${bytes(max * f)}</text>`).join('');
+  const ticks = hourly.map((h, i) => (i % 6 === 0 || i === hourly.length - 1)
+    ? `<text x="${x(i)}" y="${H - 6}" text-anchor="${i === 0 ? 'start' : i === hourly.length - 1 ? 'end' : 'middle'}">${i === hourly.length - 1 ? 'Now' : new Date(h.t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</text>` : '').join('');
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  svg.innerHTML = `${grid}${ticks}
+    <path d="${path('down')}L${x(hourly.length - 1)},${y(0)}L${x(0)},${y(0)}Z" fill="${DOWN}" opacity=".12"/>
+    <path d="${path('down')}" fill="none" stroke="${DOWN}" stroke-width="2" stroke-linejoin="round"/>
+    <path d="${path('up')}" fill="none" stroke="${UP}" stroke-width="2" stroke-linejoin="round"/>
+    <line id="hoverLine" y1="${pad.t}" y2="${pad.t + ih}" stroke="rgba(255,255,255,.35)" visibility="hidden"/>
+    <circle id="hoverDown" r="5" fill="${DOWN}" stroke="#111118" stroke-width="2" visibility="hidden"/>
+    <circle id="hoverUp" r="5" fill="${UP}" stroke="#111118" stroke-width="2" visibility="hidden"/>
+    <rect x="${pad.l}" y="0" width="${iw}" height="${H}" fill="transparent" id="hoverArea"/>`;
+  const area = svg.querySelector('#hoverArea'), tip = $('useTip');
+  const show = (ev) => {
+    const r = svg.getBoundingClientRect();
+    const i = Math.round(clamp((ev.clientX - r.left - pad.l) / iw, 0, 1) * (hourly.length - 1));
+    const h = hourly[i], px = x(i);
+    for (const [id, k] of [['hoverDown', 'down'], ['hoverUp', 'up']]) {
+      const c = svg.querySelector('#' + id);
+      c.setAttribute('cx', px); c.setAttribute('cy', y(h[k])); c.setAttribute('visibility', 'visible');
+    }
+    const l = svg.querySelector('#hoverLine');
+    l.setAttribute('x1', px); l.setAttribute('x2', px); l.setAttribute('visibility', 'visible');
+    const from = new Date(h.t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    tip.innerHTML = `<small>${from}</small>↓ ${bytes(h.down)} · ↑ ${bytes(h.up)}`;
+    tip.style.left = `${clamp(px, 80, W - 80)}px`;
+    tip.style.opacity = 1;
+  };
+  const hide = () => {
+    tip.style.opacity = 0;
+    for (const id of ['hoverLine', 'hoverDown', 'hoverUp']) svg.querySelector('#' + id).setAttribute('visibility', 'hidden');
+  };
+  area.addEventListener('pointermove', show);
+  area.addEventListener('pointerdown', show);
+  area.addEventListener('pointerleave', hide);
+}
+addEventListener('resize', drawHourly);
 
 function renderWebsites(w) {
   const groups = w.groups || [];

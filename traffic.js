@@ -19,6 +19,8 @@ const readJson = (f, fallback) => { try { return JSON.parse(fs.readFileSync(f, '
 
 /* ---------- This Mac's data use, kept per day ---------- */
 const usage = readJson(USAGE, { since: Date.now(), days: {} });
+usage.hours = usage.hours || {};
+const hourStart = (t = Date.now()) => { const d = new Date(t); d.setMinutes(0, 0, 0); return d.getTime(); };
 let prev = null;
 
 function counters() {
@@ -42,6 +44,12 @@ async function sampleUsage() {
     const day = usage.days[dayKey()] || (usage.days[dayKey()] = { down: 0, up: 0 });
     day.down += c.rx - prev.rx;
     day.up += c.tx - prev.tx;
+    const h = hourStart();
+    const hour = usage.hours[h] || (usage.hours[h] = { down: 0, up: 0 });
+    hour.down += c.rx - prev.rx;
+    hour.up += c.tx - prev.tx;
+    const keep = h - 8 * 86400000;
+    for (const k of Object.keys(usage.hours)) if (Number(k) < keep) delete usage.hours[k];
   }
   prev = c;
 }
@@ -56,7 +64,12 @@ function usageReport() {
     const k = dayKey(Date.now() - i * 86400000);
     days.push({ date: k, ...(usage.days[k] || { down: 0, up: 0 }) });
   }
-  return { scope: 'This Mac', today: usage.days[dayKey()] || { down: 0, up: 0 }, lifetime: { ...total, since: usage.since }, days, apps: null };
+  const hours = [];
+  for (let i = 23; i >= 0; i--) {
+    const t = hourStart() - i * 3600000;
+    hours.push({ t, ...(usage.hours[t] || { down: 0, up: 0 }) });
+  }
+  return { scope: 'This Mac', hours, today: usage.days[dayKey()] || { down: 0, up: 0 }, lifetime: { ...total, since: usage.since }, days, apps: null };
 }
 
 /* ---------- Locations, looked up once per address and cached ---------- */

@@ -71,6 +71,13 @@ final class Traffic {
             long[] d = total(s, e);
             days.put(new JSONObject().put("date", fmt.format(s)).put("down", d[0]).put("up", d[1]));
         }
+        JSONArray hours = new JSONArray();
+        long hourNow = now - now % 3600000;
+        for (int i = 23; i >= 0; i--) {
+            long s = hourNow - i * 3600000L;
+            long[] h = total(s, i == 0 ? now : s + 3600000L);
+            hours.put(new JSONObject().put("t", s).put("down", h[0]).put("up", h[1]));
+        }
         // Android keeps a limited history, so lifetime starts at the oldest month it still has.
         long since = startOfMonth(now, 0);
         for (int m = 1; m <= 24; m++) {
@@ -87,6 +94,7 @@ final class Traffic {
             .put("today", new JSONObject().put("down", t[0]).put("up", t[1]))
             .put("lifetime", new JSONObject().put("down", life[0]).put("up", life[1]).put("since", since))
             .put("days", days)
+            .put("hours", hours)
             .put("apps", apps(today, now));
         usageTime = now;
         return usageCache;
