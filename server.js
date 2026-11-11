@@ -33,10 +33,11 @@ function buildHelper() {
 function touchAlive() { fs.writeFileSync(ALIVE, String(Date.now())); }
 function stopHelper() { spawnSync('pkill', ['-f', BIN]); }
 
+let helperStarted = 0;
 function startHelper() {
   stopHelper();
   touchAlive();
-  setInterval(touchAlive, 5000).unref();
+  helperStarted = Date.now();
   execFile('open', ['-g', '-n', APP, '--args', DATA], (err) => {
     if (err) console.error('Could not start the helper:', err.message);
   });
@@ -116,6 +117,11 @@ async function sample() {
   fails.router = routerMs == null ? fails.router + 1 : 0;
   fails.internet = inet == null ? fails.internet + 1 : 0;
   const w = readWifi();
+  // Restart the helper if it has stopped writing, giving it time to come up first.
+  if (!w && Date.now() - helperStarted > 20000) {
+    console.log('Wi-Fi helper stopped responding. Restarting it.');
+    startHelper();
+  }
   track(causeFor(w), w);
   setTimeout(sample, 2000);
 }
@@ -222,6 +228,7 @@ function lanAddress() {
 
 buildHelper();
 startHelper();
+setInterval(touchAlive, 5000).unref();
 sample();
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`\nSignal is running.\n  On this Mac:  http://localhost:${PORT}`);
