@@ -8,7 +8,7 @@ const { execFile } = require('child_process');
 
 const BUILD = path.join(__dirname, 'build');
 const USAGE = path.join(BUILD, 'usage.json');
-const DNS_LOG = path.join(BUILD, 'dns-log.jsonl');
+const DNS_LOG = path.join(os.homedir(), 'Library', 'Application Support', 'Signal', 'dns-log.jsonl');
 const GEO = path.join(BUILD, 'geo.json');
 
 const dayKey = (t = Date.now()) => {

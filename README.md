@@ -59,7 +59,7 @@ sudo scripts/install-services.sh             # install: both start at boot and r
 sudo scripts/install-services.sh uninstall   # remove
 ```
 
-This installs the Signal server (as your user) and the website log (on port 53) as macOS background services. Logs go to `build/server.log` and `build/dns-monitor.log`.
+This installs the Signal server (as your user) and the website log (on port 53) as macOS background services. The server logs to `build/server.log`. The website log and its records live in `~/Library/Application Support/Signal`, because macOS blocks background services from the Documents folder. Rerun the install command after changing `dns-monitor.js`.
 
 ## Release a new APK
 

@@ -8,7 +8,8 @@ const os = require('os');
 const path = require('path');
 
 const UPSTREAM = process.env.UPSTREAM_DNS || '1.1.1.1';
-const LOG = path.join(__dirname, 'build', 'dns-log.jsonl');
+// Lives outside Documents, which macOS blocks for background services.
+const LOG = process.env.SIGNAL_DNS_LOG || path.join(os.homedir(), 'Library', 'Application Support', 'Signal', 'dns-log.jsonl');
 const MAX_LOG_BYTES = 50 * 1024 * 1024;
 
 function lanAddress() {
