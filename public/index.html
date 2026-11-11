@@ -1,0 +1,523 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#000000">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Signal</title>
+<style>
+:root{--c:#4ade80;--bg:#07070c;--card:rgba(255,255,255,.035);--line:rgba(170,160,255,.16);--text:#fff;--dim:rgba(255,255,255,.62);--speed:2.2s}
+*{box-sizing:border-box;margin:0}
+html{background:var(--bg)}
+html,body{overflow-x:clip}
+body{min-height:100dvh;color:var(--text);background:var(--bg);font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","Segoe UI",Roboto,sans-serif;-webkit-font-smoothing:antialiased;overflow-x:hidden}
+.glow{position:fixed;inset:0;z-index:-1;background:radial-gradient(90% 55% at 50% 32%,rgba(96,84,200,.28),transparent 72%)}
+main{max-width:1080px;margin:0 auto;padding:max(16px,env(safe-area-inset-top)) 16px 40px}
+header{display:flex;justify-content:space-between;align-items:center;gap:12px}
+.net{min-width:0}
+.net small{display:block;font-size:13px;font-weight:600;color:var(--dim)}
+.net b{display:block;font-size:22px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pill{flex:none;font-size:12px;font-weight:700;padding:7px 12px;border-radius:99px;background:var(--card);border:1px solid var(--line)}
+.hero{display:flex;flex-direction:column;align-items:center;text-align:center;padding:10px 0 30px}
+.orb{position:relative;width:min(92vw,480px);aspect-ratio:1;display:grid;place-items:center}
+#orb{position:absolute;top:0;left:50%;translate:-50% 0;width:100vw;height:100%;pointer-events:none}
+.label{font-size:13px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--dim);margin-top:6px}
+.num{position:relative;font-size:min(25vw,128px);line-height:1;font-weight:900;letter-spacing:-.05em;font-variant-numeric:tabular-nums;text-shadow:0 0 34px rgba(160,145,255,.55)}
+.num sup{font-size:.36em;font-weight:800;vertical-align:.95em;letter-spacing:0;margin-left:.04em}
+.say{font-size:clamp(26px,7.5vw,40px);font-weight:800;letter-spacing:-.02em;line-height:1.1;color:var(--c);margin-top:6px;transition:color .8s}
+.trend{display:flex;align-items:center;gap:8px;margin-top:14px;font-size:16px;font-weight:700;color:var(--dim);min-height:30px}
+.trend svg{width:26px;height:26px;transition:rotate .5s cubic-bezier(.3,1.4,.5,1)}
+.alert{display:none;gap:12px;align-items:center;padding:16px;border-radius:20px;background:#fff;color:#000;margin-bottom:14px;animation:rise .45s cubic-bezier(.2,1.3,.5,1)}
+.alert.on{display:flex}
+.alert b{display:block;font-size:17px;font-weight:800}
+.alert span{font-size:14px;font-weight:500}
+.alert em{font-style:normal;margin-left:auto;font-size:30px;font-weight:900;font-variant-numeric:tabular-nums}
+@keyframes rise{from{translate:0 14px;opacity:0}}
+.grid{display:grid;gap:14px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:24px;padding:18px;backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);min-width:0}
+h2{font-size:20px;font-weight:800;letter-spacing:-.01em}
+.sub{font-size:14px;color:var(--dim);margin-top:3px;line-height:1.35}
+#star{display:block;width:100%;max-width:460px;margin:8px auto 0;overflow:visible}
+#star text{font-family:inherit;text-anchor:middle;fill:#fff}
+#star .p{font-weight:900;font-size:17px}
+#star .n{font-weight:600;font-size:12px;fill:rgba(255,255,255,.75)}
+#star line{stroke-width:2;stroke-dasharray:3 9;stroke-linecap:round;animation:flow 1s linear infinite}
+@keyframes flow{to{stroke-dashoffset:-12}}
+.pulse{transform-box:fill-box;transform-origin:center;animation:pulse 1.6s ease-out infinite}
+@keyframes pulse{0%{transform:scale(1);opacity:.7}100%{transform:scale(1.7);opacity:0}}
+.stats{display:grid;grid-template-columns:1fr 1fr;gap:18px 12px;margin-top:16px}
+.stat small{display:block;font-size:13px;font-weight:600;color:var(--dim)}
+.stat b{font-size:32px;font-weight:900;letter-spacing:-.03em;font-variant-numeric:tabular-nums}
+.stat i{font-style:normal;font-size:14px;font-weight:700;color:var(--dim);margin-left:3px}
+button{font:inherit;font-size:17px;font-weight:800;width:100%;margin-top:18px;min-height:52px;border:0;border-radius:16px;background:#fff;color:#000;cursor:pointer;transition:scale .15s}
+button:active{scale:.97}
+button:disabled{opacity:.6;cursor:default}
+button:focus-visible{outline:3px solid var(--c);outline-offset:2px}
+#spark{display:block;width:100%;height:90px;margin-top:12px}
+.note{font-size:13px;line-height:1.4;color:var(--dim);margin-top:12px}
+@media(min-width:800px){.grid{grid-template-columns:1fr 1fr}.wide{grid-column:1/-1}}
+@media(prefers-reduced-motion:reduce){#star line,.pulse{animation:none}}
+</style>
+</head>
+<body>
+<div class="glow"></div>
+<main>
+  <header>
+    <div class="net"><small id="netLabel">Connected to</small><b id="ssid">Searching…</b></div>
+    <div class="pill" id="pill">Live</div>
+  </header>
+
+  <section class="hero" aria-live="polite">
+    <div class="orb"><canvas id="orb" aria-hidden="true"></canvas><div class="num"><span id="num">--</span><sup>%</sup></div></div>
+    <div class="say" id="say">Finding signal</div>
+    <div class="label" id="metric">Signal strength</div>
+    <div class="trend" id="trend"></div>
+  </section>
+
+  <div class="alert" id="alert" role="status">
+    <div><b id="alertT"></b><span id="alertS"></span></div><em id="alertN"></em>
+  </div>
+
+  <div class="grid">
+    <section class="card">
+      <h2 id="starTitle">Networks around you</h2>
+      <p class="sub" id="starSub">Scanning…</p>
+      <svg id="star" viewBox="-12 -12 424 440" role="img" aria-label="Star map of nearby Wi-Fi networks and their signal"></svg>
+      <p class="note" id="nameNote" hidden></p>
+    </section>
+
+    <section class="card">
+      <h2>Local network</h2>
+      <p class="sub" id="healthSay">Measuring…</p>
+      <div class="stats" id="stats"></div>
+      <canvas id="spark" aria-hidden="true"></canvas>
+      <p class="note">Signal over the last 2 minutes</p>
+    </section>
+
+    <section class="card wide">
+      <h2>Speed</h2>
+      <p class="sub">Tests your internet through Cloudflare and uses about 40 MB of data.</p>
+      <div class="stats">
+        <div class="stat"><small>Download</small><b id="dl">--</b><i>Mbps</i></div>
+        <div class="stat"><small>Upload</small><b id="ul">--</b><i>Mbps</i></div>
+        <div class="stat"><small>Internet ping</small><b id="ip">--</b><i>ms</i></div>
+        <div class="stat"><small id="linkLabel">Wi-Fi link rate</small><b id="link">--</b><i>Mbps</i></div>
+      </div>
+      <button id="go">Run speed test</button>
+    </section>
+  </div>
+</main>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+const DEMO = new URLSearchParams(location.search).has('demo');
+const LEVELS = [
+  { min: 80, name: 'Excellent', say: 'Excellent signal', color: '#4ade80', speed: 1.1 },
+  { min: 60, name: 'Good', say: 'Good signal', color: '#a3e635', speed: 1.7 },
+  { min: 40, name: 'Weak', say: 'Your signal is weak', color: '#fbbf24', speed: 2.5 },
+  { min: 1, name: 'Very low', say: 'Signal is very low', color: '#f87171', speed: 3.6 },
+  { min: 0, name: 'None', say: 'No signal', color: '#a1a1aa', speed: 6 },
+];
+const levelFor = (p) => LEVELS.find((l) => p >= l.min);
+
+/* ---------- Big number ---------- */
+let shown = 0, target = 0, lastLevel = null;
+let lastFrame = performance.now();
+(function tickNumber() {
+  const now = performance.now();
+  shown += (target - shown) * (1 - Math.exp(-(now - lastFrame) / 130));
+  lastFrame = now;
+  if (Math.abs(target - shown) < 0.4) shown = target;
+  $('num').textContent = Math.round(shown);
+  drawOrb();
+  requestAnimationFrame(tickNumber);
+})();
+
+/* Orb: light flare, dotted halos, swirling rings and a progress arc around the number. */
+function drawOrb() {
+  const c = $('orb'), W = c.clientWidth, H = c.clientHeight, dpr = Math.min(devicePixelRatio || 1, 2);
+  if (!W) return;
+  if (c.width !== Math.round(W * dpr) || c.height !== Math.round(H * dpr)) { c.width = Math.round(W * dpr); c.height = Math.round(H * dpr); }
+  const g = c.getContext('2d'), cx = W / 2, cy = H / 2, R = H * 0.49, TAU = Math.PI * 2;
+  const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const t = still ? 0 : performance.now() / 1000;
+  const level = levelFor(target), tint = level.color;
+  g.setTransform(dpr, 0, 0, dpr, 0, 0);
+  g.clearRect(0, 0, W, H);
+  g.globalCompositeOperation = 'lighter';
+
+  const flare = g.createLinearGradient(0, 0, W, 0);
+  flare.addColorStop(0, 'rgba(150,135,255,0)');
+  flare.addColorStop(0.5, 'rgba(225,215,255,.95)');
+  flare.addColorStop(1, 'rgba(150,135,255,0)');
+  g.fillStyle = flare;
+  g.fillRect(0, cy - 0.75, W, 1.5);
+  g.globalAlpha = 0.16;
+  g.fillRect(0, cy - 7, W, 14);
+  g.globalAlpha = 1;
+
+  g.strokeStyle = 'rgba(165,150,255,.35)';
+  g.lineWidth = 1;
+  for (const side of [-1, 1]) {
+    g.beginPath();
+    for (let x = 0; x <= W; x += 4) {
+      const y = cy + side * R * 0.86 * Math.exp(-(((x - cx) / (R * 0.82)) ** 2));
+      x ? g.lineTo(x, y) : g.moveTo(x, y);
+    }
+    g.stroke();
+  }
+
+  for (let k = 0; k < 4; k++) {
+    const r = R * (0.93 + k * 0.17), n = 96 + k * 24;
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * TAU + t * (k % 2 ? -0.05 : 0.07);
+      const v = 0.5 + 0.5 * Math.sin(a * 3 + t * 0.8 + k);
+      g.fillStyle = `rgba(170,158,255,${(0.08 + 0.5 * v * v) * (1 - k * 0.18)})`;
+      g.fillRect(cx + Math.cos(a) * r - 0.8, cy + Math.sin(a) * r - 0.8, 1.6, 1.6);
+    }
+  }
+
+  const beat = still ? 0.5 : (t / level.speed) % 1;
+  g.strokeStyle = tint;
+  g.globalAlpha = 0.5 * (1 - beat);
+  g.lineWidth = 1.5;
+  g.beginPath(); g.arc(cx, cy, R * (0.74 + beat * 0.6), 0, TAU); g.stroke();
+  g.globalAlpha = 1;
+
+  g.lineWidth = 0.8;
+  for (let i = 0; i < 16; i++) {
+    const rot = t * (0.12 + (i % 4) * 0.05) * (i % 2 ? 1 : -1) + i * 0.7;
+    g.strokeStyle = `rgba(${i % 3 ? '150,140,255' : '225,220,255'},${0.14 + (i % 5) * 0.05})`;
+    g.beginPath();
+    g.ellipse(cx, cy, R * (0.76 + (i % 7) * 0.022), R * (0.72 + (i % 5) * 0.022), rot, 0, TAU);
+    g.stroke();
+  }
+
+  g.globalCompositeOperation = 'source-over';
+  const core = g.createRadialGradient(cx, cy, R * 0.55, cx, cy, R * 0.76);
+  core.addColorStop(0, '#050509');
+  core.addColorStop(0.82, '#07070d');
+  core.addColorStop(1, 'rgba(7,7,13,0)');
+  g.fillStyle = core;
+  g.beginPath(); g.arc(cx, cy, R * 0.76, 0, TAU); g.fill();
+
+  const r = R * 0.68, end = -Math.PI / 2 + (shown / 100) * TAU;
+  g.strokeStyle = 'rgba(255,255,255,.28)';
+  g.lineWidth = 1;
+  g.beginPath(); g.arc(cx, cy, r, 0, TAU); g.stroke();
+  if (shown > 0.5) {
+    g.strokeStyle = tint;
+    g.lineWidth = 5;
+    g.lineCap = 'round';
+    g.shadowColor = tint;
+    g.shadowBlur = 18;
+    g.beginPath(); g.arc(cx, cy, r, -Math.PI / 2, end); g.stroke();
+    g.shadowBlur = 0;
+  }
+}
+
+const history = [];
+function setHero(p, sayOverride) {
+  target = p;
+  const l = levelFor(p);
+  document.documentElement.style.setProperty('--c', l.color);
+  document.documentElement.style.setProperty('--speed', l.speed + 's');
+  $('say').textContent = sayOverride || l.say;
+  if (lastLevel && LEVELS.indexOf(l) > LEVELS.indexOf(lastLevel) && navigator.vibrate) navigator.vibrate([60, 40, 60]);
+  lastLevel = l;
+  history.push(p);
+  if (history.length > 120) history.shift();
+  drawTrend();
+  drawSpark(l.color);
+}
+
+function drawTrend() {
+  const n = history.length;
+  if (n < 8) { $('trend').textContent = ''; return; }
+  const avg = (a) => a.reduce((s, v) => s + v, 0) / a.length;
+  const delta = avg(history.slice(-3)) - avg(history.slice(-8, -3));
+  const dir = delta > 2 ? 'up' : delta < -2 ? 'down' : 'flat';
+  const rot = { up: 0, down: 180, flat: 90 }[dir];
+  const text = { up: 'Getting stronger', down: 'Getting weaker', flat: 'Holding steady' }[dir];
+  $('trend').innerHTML = `<svg viewBox="0 0 24 24" style="rotate:${rot}deg" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20V4M5 11l7-7 7 7"/></svg>${text}`;
+}
+
+function drawSpark(color) {
+  const c = $('spark'), r = devicePixelRatio || 1, w = c.clientWidth, h = c.clientHeight;
+  if (!w) return;
+  c.width = w * r; c.height = h * r;
+  const g = c.getContext('2d');
+  g.scale(r, r);
+  if (history.length < 2) return;
+  const x = (i) => w - (history.length - 1 - i) * (w / 119);
+  const y = (v) => h - 4 - (v / 100) * (h - 8);
+  g.beginPath();
+  history.forEach((v, i) => (i ? g.lineTo(x(i), y(v)) : g.moveTo(x(i), y(v))));
+  g.lineWidth = 3; g.lineJoin = 'round'; g.strokeStyle = '#fff'; g.stroke();
+  g.lineTo(w, h); g.lineTo(x(0), h); g.closePath();
+  g.fillStyle = color + '55'; g.fill();
+}
+
+/* ---------- Star topology ---------- */
+const NS = 'http://www.w3.org/2000/svg', C = 200, MAX_NODES = 7;
+const nodes = new Map(), slots = Array(MAX_NODES).fill(null);
+const el = (tag, attrs, parent) => {
+  const e = document.createElementNS(NS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (parent) parent.appendChild(e);
+  return e;
+};
+const star = $('star');
+const linesLayer = el('g', {}, star), nodesLayer = el('g', {}, star);
+el('circle', { cx: C, cy: C, r: 34, fill: '#fff' }, nodesLayer);
+const youText = el('text', { x: C, y: C + 5, style: 'fill:#000;font-weight:900;font-size:15px' }, nodesLayer);
+youText.textContent = 'YOU';
+
+const short = (s) => (s.length > 13 ? s.slice(0, 12) + '…' : s);
+const radiusFor = (p) => 104 + (100 - p) * 0.62;
+
+function renderStar(list) {
+  const keep = new Set(list.map((n) => n.id));
+  for (const [id, n] of nodes) {
+    if (!keep.has(id)) { n.g.remove(); n.line.remove(); slots[n.slot] = null; nodes.delete(id); }
+  }
+  for (const item of list) {
+    let n = nodes.get(item.id);
+    if (!n) {
+      const slot = slots.indexOf(null);
+      slots[slot] = item.id;
+      const g = el('g', {}, nodesLayer);
+      n = {
+        slot, g, r: radiusFor(item.percent), line: el('line', { x1: C, y1: C }, linesLayer),
+        halo: el('circle', { r: 26, fill: 'none', 'stroke-width': 3 }, g),
+        dot: el('circle', { r: 26 }, g),
+        p: el('text', { class: 'p', y: 6 }, g),
+        n: el('text', { class: 'n', y: 43 }, g),
+      };
+      nodes.set(item.id, n);
+    }
+    n.target = radiusFor(item.percent);
+    n.dot.setAttribute('fill', '#0d0d16');
+    n.dot.setAttribute('stroke', item.current ? levelFor(item.percent).color : item.best ? '#4ade80' : 'rgba(170,160,255,.45)');
+    n.dot.setAttribute('stroke-width', item.current || item.best ? 3 : 1);
+    n.halo.setAttribute('stroke', item.best ? '#4ade80' : 'none');
+    n.halo.setAttribute('class', item.best ? 'pulse' : '');
+    n.line.setAttribute('stroke', item.current ? '#fff' : item.best ? '#4ade80' : 'rgba(170,160,255,.35)');
+    n.p.textContent = item.percent;
+    n.n.textContent = (item.best ? '★ ' : '') + short(item.label);
+  }
+}
+
+(function animateStar() {
+  for (const n of nodes.values()) {
+    n.r += (n.target - n.r) * 0.08;
+    const a = -Math.PI / 2 + (n.slot / MAX_NODES) * Math.PI * 2;
+    const x = C + Math.cos(a) * n.r, y = C + Math.sin(a) * n.r;
+    n.g.setAttribute('transform', `translate(${x.toFixed(1)} ${y.toFixed(1)})`);
+    n.line.setAttribute('x2', x.toFixed(1));
+    n.line.setAttribute('y2', y.toFixed(1));
+  }
+  requestAnimationFrame(animateStar);
+})();
+
+/* ---------- Status rendering ---------- */
+const stat = (label, value, unit) => `<div class="stat"><small>${label}</small><b>${value ?? '--'}</b><i>${unit || ''}</i></div>`;
+const nameOf = (n) => n.ssid || `Ch ${n.channel} · ${n.band.replace(' GHz', 'G')}`;
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const healthWord = (s) => (s >= 80 ? 'Your local network is healthy.' : s >= 55 ? 'Your local network is okay.' : s >= 30 ? 'Your local network is struggling.' : 'Your local network is in poor shape.');
+
+function showAlert(title, sub, num) {
+  $('alert').classList.toggle('on', Boolean(title));
+  if (!title) return;
+  $('alertT').textContent = title; $('alertS').textContent = sub; $('alertN').textContent = num;
+}
+
+function renderNetworks(s, myPercent) {
+  const margin = 15;
+  const top = s.nearby.slice(0, MAX_NODES - (s.connected ? 1 : 0));
+  const best = s.connected && top[0] && top[0].percent >= myPercent + margin ? top[0] : null;
+  const items = top.map((n) => ({ id: n.id, percent: n.percent, label: nameOf(n), best: n === best }));
+  if (s.connected) items.unshift({ id: 'current', percent: s.percent, label: s.ssid || 'Connected', current: true });
+  renderStar(items);
+
+  const count = s.nearby.length;
+  $('starSub').textContent = s.viewer === 'remote'
+    ? `As seen by the Mac running Signal. ${count} nearby.`
+    : `${count} nearby. Closer to the center means a stronger signal.`;
+  $('nameNote').hidden = s.namesAvailable;
+  $('nameNote').textContent = 'Names are hidden until you allow Location for SignalHelper in System Settings → Privacy & Security → Location Services.';
+  return best;
+}
+
+function renderHost(s) {
+  $('netLabel').textContent = 'Connected to';
+  $('ssid').textContent = s.ssid || (s.namesAvailable ? 'Wi-Fi' : 'Wi-Fi network');
+  $('metric').textContent = 'Signal strength';
+  $('pill').textContent = `${s.rssi} dBm`;
+  setHero(s.percent);
+  const best = renderNetworks(s, s.percent);
+  if (best) showAlert(`${nameOf(best)} is stronger`, `${best.percent}% there, ${s.percent}% here. Consider switching.`, `+${best.percent - s.percent}`);
+  else if (s.percent < 40) showAlert('Your signal is very low', 'Move closer to your router.', `${s.percent}%`);
+  else if (s.percent < 60) showAlert('Your signal is weak', 'Move closer to your router for better speed.', `${s.percent}%`);
+  else showAlert('');
+  renderStats(s);
+  $('link').textContent = s.txRate;
+}
+
+function renderStats(s) {
+  $('healthSay').textContent = `${healthWord(s.health.score)} Health ${s.health.score} of 100.`;
+  $('stats').innerHTML =
+    stat('Signal', s.rssi, 'dBm') + stat('Signal to noise', s.health.snr, 'dB') +
+    stat('Router ping', s.router.ms == null ? '--' : s.router.ms.toFixed(1), 'ms') + stat('Packet loss', s.health.loss, '%') +
+    stat('Channel', s.channel, esc(s.band)) + stat('Width', s.width || '--', 'MHz');
+}
+
+function renderOffline(title, sub) {
+  $('ssid').textContent = title;
+  $('pill').textContent = 'Offline';
+  setHero(0, sub);
+  showAlert('');
+}
+
+/* Phones cannot read their own radio from a browser, so link quality is estimated from timing to the Mac. */
+const probes = [];
+let lanMbps = null;
+async function probe() {
+  const t = performance.now();
+  try {
+    const r = await fetch('/api/ping?' + t, { cache: 'no-store', signal: AbortSignal.timeout(1500) });
+    await r.text();
+    probes.push(performance.now() - t);
+  } catch { probes.push(null); }
+  if (probes.length > 10) probes.shift();
+}
+async function measureLan() {
+  try {
+    const t = performance.now();
+    const r = await fetch('/api/blob?kb=512&' + t, { cache: 'no-store', signal: AbortSignal.timeout(4000) });
+    const b = await r.arrayBuffer();
+    lanMbps = Math.round(b.byteLength * 8 / ((performance.now() - t) / 1000) / 1e6);
+  } catch { lanMbps = 0; }
+}
+function linkQuality() {
+  const ok = probes.filter((v) => v != null).sort((a, b) => a - b);
+  if (!ok.length) return { percent: 0, ms: null, loss: 100 };
+  const ms = ok[Math.floor(ok.length * 0.25)];
+  const loss = (probes.length - ok.length) / probes.length;
+  const timing = clamp(1 - Math.log(Math.max(ms, 10) / 10) / Math.log(40), 0, 1);
+  return { percent: Math.round(100 * timing * (1 - loss)), ms, loss: Math.round(loss * 100) };
+}
+function renderRemote(s) {
+  const q = linkQuality();
+  $('netLabel').textContent = 'Link from this device to';
+  $('ssid').textContent = s.ssid || 'your Mac';
+  $('metric').textContent = 'Link quality · estimated';
+  $('pill').textContent = q.ms == null ? 'No link' : `${Math.round(q.ms)} ms`;
+  setHero(q.percent, q.percent >= 60 ? levelFor(q.percent).name + ' link' : levelFor(q.percent).say);
+  if (q.percent < 60) showAlert(q.percent < 40 ? 'Your signal is very low' : 'Your signal is weak', 'Move closer to your router.', `${q.percent}%`);
+  else showAlert('');
+  renderNetworks(s, s.percent ?? 0);
+  $('healthSay').textContent = 'Measured from this device to the Mac.';
+  $('stats').innerHTML = stat('Latency', q.ms == null ? '--' : Math.round(q.ms), 'ms') + stat('Packet loss', q.loss, '%') +
+    stat('Local speed', lanMbps, 'Mbps') + stat('Mac signal', s.percent, '%');
+  $('linkLabel').textContent = 'Local speed';
+  $('link').textContent = lanMbps ?? '--';
+}
+
+function render(s) {
+  if (!s.helper) return renderOffline('Wi-Fi helper not running', 'Waiting for Wi-Fi data');
+  if (s.viewer === 'remote') return renderRemote(s);
+  if (!s.powerOn) return renderOffline('Wi-Fi is off', 'Turn on Wi-Fi');
+  if (!s.connected) {
+    renderOffline('Not connected', 'No signal');
+    renderNetworks(s, 0);
+    return;
+  }
+  renderHost(s);
+}
+
+/* ---------- Demo: scripted walk away from the router, for trying the page without moving ---------- */
+let demoT = 0;
+function demoStatus() {
+  demoT += 1;
+  const rssi = Math.round(-58 - 16 * (1 - Math.cos(demoT / 7)));
+  const mk = (ssid, r, channel, band) => ({ id: ssid, ssid, rssi: r, percent: 2 * (r + 100), channel, band });
+  return {
+    viewer: 'host', helper: true, powerOn: true, connected: true, namesAvailable: true, ssid: 'Demo Home', rssi, noise: -92,
+    percent: clamp(2 * (rssi + 100), 0, 100), txRate: Math.round(866 * (rssi + 100) / 42), channel: 44, band: '5 GHz', width: 80,
+    router: { ms: 4.2 }, health: { score: clamp(2 * (rssi + 100), 0, 100), snr: rssi + 92, loss: 0 },
+    nearby: [mk('Demo Upstairs', -65, 36, '5 GHz'), mk('Cafe Guest', -72, 6, '2.4 GHz'), mk('Neighbor', -78, 11, '2.4 GHz'), mk('Office', -83, 1, '2.4 GHz')],
+  };
+}
+
+let failures = 0;
+async function poll() {
+  if (DEMO) { render(demoStatus()); $('pill').textContent = 'Demo'; return setTimeout(poll, 1000); }
+  try {
+    const r = await fetch('/api/status', { cache: 'no-store', signal: AbortSignal.timeout(3000) });
+    const s = await r.json();
+    failures = 0;
+    if (s.viewer === 'remote') await probe();
+    render(s);
+  } catch {
+    if (++failures >= 2) renderOffline('Connection lost', 'Out of range');
+  }
+  setTimeout(poll, 1000);
+}
+poll();
+setInterval(() => { if (!DEMO && probes.length) measureLan(); }, 6000);
+
+/* ---------- Internet speed test ---------- */
+const CF = 'https://speed.cloudflare.com';
+async function testPing() {
+  const times = [];
+  for (let i = 0; i < 5; i++) {
+    const t = performance.now();
+    await (await fetch(`${CF}/__down?bytes=0&r=${t}`, { cache: 'no-store' })).arrayBuffer();
+    times.push(performance.now() - t);
+  }
+  return Math.round(times.sort((a, b) => a - b)[2]);
+}
+async function testDownload(onUpdate) {
+  const ctl = new AbortController(), start = performance.now();
+  const timer = setTimeout(() => ctl.abort(), 9000);
+  let bytes = 0;
+  try {
+    const r = await fetch(`${CF}/__down?bytes=30000000&r=${start}`, { cache: 'no-store', signal: ctl.signal });
+    const reader = r.body.getReader();
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      bytes += value.length;
+      onUpdate(bytes * 8 / ((performance.now() - start) / 1000) / 1e6);
+    }
+  } catch (e) { if (e.name !== 'AbortError') throw e; }
+  clearTimeout(timer);
+  return bytes * 8 / ((performance.now() - start) / 1000) / 1e6;
+}
+async function testUpload() {
+  const body = new Uint8Array(8e6), start = performance.now();
+  await fetch(`${CF}/__up?r=${start}`, { method: 'POST', body, headers: { 'Content-Type': 'text/plain' }, signal: AbortSignal.timeout(20000) });
+  return body.length * 8 / ((performance.now() - start) / 1000) / 1e6;
+}
+$('go').onclick = async () => {
+  const b = $('go');
+  b.disabled = true;
+  try {
+    b.textContent = 'Testing ping…';
+    $('ip').textContent = await testPing();
+    b.textContent = 'Testing download…';
+    $('dl').textContent = Math.round(await testDownload((m) => { $('dl').textContent = Math.round(m); }));
+    b.textContent = 'Testing upload…';
+    $('ul').textContent = Math.round(await testUpload());
+    b.textContent = 'Run again';
+  } catch {
+    b.textContent = 'Test failed. Try again';
+  }
+  b.disabled = false;
+};
+</script>
+</body>
+</html>
