@@ -59,6 +59,14 @@ button:disabled{opacity:.6;cursor:default}
 button:focus-visible{outline:3px solid var(--c);outline-offset:2px}
 #spark{display:block;width:100%;height:90px;margin-top:12px}
 .note{font-size:13px;line-height:1.4;color:var(--dim);margin-top:12px}
+.events{list-style:none;padding:0;margin-top:16px;display:grid;gap:8px}
+.events li{display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:14px;background:rgba(255,255,255,.04);border:1px solid var(--line);font-size:15px}
+.events time{font-weight:800;font-variant-numeric:tabular-nums;min-width:52px}
+.events span{flex:1;min-width:0;font-weight:600}
+.events small{color:var(--dim);font-size:13px;text-align:right}
+.events .dot{flex:none;width:10px;height:10px;border-radius:50%}
+.events li.live{border-color:#f87171}
+@media(min-width:800px){.drops{grid-template-columns:repeat(4,1fr)}}
 @media(min-width:800px){.grid{grid-template-columns:1fr 1fr}.wide{grid-column:1/-1}}
 @media(prefers-reduced-motion:reduce){#star line,.pulse{animation:none}}
 </style>
@@ -96,6 +104,13 @@ button:focus-visible{outline:3px solid var(--c);outline-offset:2px}
       <div class="stats" id="stats"></div>
       <canvas id="spark" aria-hidden="true"></canvas>
       <p class="note">Signal over the last 2 minutes</p>
+    </section>
+
+    <section class="card wide" id="dropCard" hidden>
+      <h2>Drop recorder</h2>
+      <p class="sub" id="dropSay">Recording on your Mac every 2 seconds, even when this page is closed.</p>
+      <div class="stats drops" id="dropStats"></div>
+      <ol class="events" id="dropList"></ol>
     </section>
 
     <section class="card wide">
@@ -564,6 +579,46 @@ async function poll() {
   setTimeout(poll, 1000);
 }
 poll();
+/* ---------- Drop recorder ---------- */
+const CAUSES = {
+  wifi: { label: 'Wi-Fi lost', color: '#f87171' },
+  weak: { label: 'Weak signal', color: '#fbbf24' },
+  router: { label: 'Router not responding', color: '#c084fc' },
+  internet: { label: 'Internet down (provider)', color: '#60a5fa' },
+};
+const duration = (ms) => { const s = Math.round(ms / 1000); return s < 60 ? `${s} s` : s < 3600 ? `${Math.round(s / 60)} min` : `${(s / 3600).toFixed(1)} h`; };
+
+function dropVerdict(r) {
+  const total = Object.values(r.counts).reduce((a, b) => a + b, 0);
+  if (!total) return 'No drops in the last 24 hours. Walk around your home with the Mac to find weak spots.';
+  const n = `${total} ${total === 1 ? 'problem' : 'problems'} in 24 hours`;
+  const top = Object.keys(r.seconds).sort((a, b) => r.seconds[b] - r.seconds[a])[0];
+  return {
+    wifi: `${n}, mostly lost Wi-Fi. If this happens in certain rooms, a mesh system will help.`,
+    weak: `${n}, mostly weak signal. Move the router to a central spot or add a mesh system.`,
+    router: `${n}, mostly the router not responding. Restart it, and call your provider if it continues.`,
+    internet: `${n}, mostly the internet line itself. Your Wi-Fi is fine, so contact your provider.`,
+  }[top];
+}
+
+async function loadDrops() {
+  if (DEMO || source === null || source === 'browser') { $('dropCard').hidden = true; return; }
+  try {
+    const r = await (await fetch(source + '/api/drops', { cache: 'no-store' })).json();
+    $('dropCard').hidden = false;
+    $('dropSay').textContent = dropVerdict(r);
+    $('dropStats').innerHTML = Object.entries(CAUSES).map(([k, c]) =>
+      `<div class="stat"><small>${c.label}</small><b>${r.counts[k]}</b><i>${r.seconds[k] ? duration(r.seconds[k] * 1000) : 'times'}</i></div>`).join('');
+    $('dropList').innerHTML = r.events.slice(0, 8).map((e) => {
+      const c = CAUSES[e.cause], when = new Date(e.start).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      const detail = e.ongoing ? 'happening now' : duration(e.end - e.start) + (e.cause === 'weak' ? ` · lowest ${e.minPercent}%` : '');
+      return `<li class="${e.ongoing ? 'live' : ''}"><i class="dot" style="background:${c.color}"></i><time>${when}</time><span>${c.label}</span><small>${detail}</small></li>`;
+    }).join('');
+  } catch { $("dropCard").hidden = true; }
+}
+setInterval(loadDrops, 10000);
+setTimeout(loadDrops, 2500);
+
 setInterval(() => { if (!DEMO && probes.length && !document.hidden) measureLan(); }, 15000);
 
 /* ---------- Internet speed test ---------- */

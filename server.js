@@ -52,16 +52,82 @@ function findRouter() {
   } catch { router.ip = null; }
 }
 
-function pingRouter() {
-  findRouter();
-  if (!router.ip) { router.ms = null; router.results = []; return setTimeout(pingRouter, 2000); }
-  execFile('ping', ['-c', '1', '-t', '1', router.ip], (err, stdout) => {
+function pingOnce(host) {
+  return new Promise((resolve) => execFile('ping', ['-c', '1', '-t', '1', host], (err, stdout) => {
     const m = /time=([\d.]+)/.exec(stdout || '');
-    router.ms = m ? Number(m[1]) : null;
-    router.results.push(Boolean(m));
+    resolve(m ? Number(m[1]) : null);
+  }));
+}
+
+// Drop recorder: every sample is classified, and each unbroken run of one problem becomes an event.
+const DROPS = path.join(ROOT, 'build', 'drops.json');
+const WEAK_BELOW = 40;
+let drops = [];
+try { drops = JSON.parse(fs.readFileSync(DROPS, 'utf8')); } catch {}
+let ongoing = null;
+const fails = { router: 0, internet: 0 };
+
+function readWifi() {
+  try {
+    const w = JSON.parse(fs.readFileSync(DATA, 'utf8'));
+    return Date.now() / 1000 - w.time < 10 ? w : null;
+  } catch { return null; }
+}
+
+function causeFor(w) {
+  if (!w || !w.powerOn) return null;
+  if (!w.connected) return 'wifi';
+  if (fails.router >= 2) return 'router';
+  if (fails.internet >= 2) return 'internet';
+  if (percentFor(w.rssi) < WEAK_BELOW) return 'weak';
+  return null;
+}
+
+function finishDrop(e) {
+  if (e.end - e.start < 4000) return;
+  drops.push(e);
+  if (drops.length > 1000) drops = drops.slice(-1000);
+  fs.writeFile(DROPS, JSON.stringify(drops), () => {});
+}
+
+function track(cause, w) {
+  const now = Date.now();
+  const percent = w && w.connected ? percentFor(w.rssi) : 0;
+  if (ongoing && ongoing.cause === cause) {
+    ongoing.end = now;
+    ongoing.minPercent = Math.min(ongoing.minPercent, percent);
+    return;
+  }
+  if (ongoing) finishDrop(ongoing);
+  ongoing = cause ? { cause, start: now, end: now, minPercent: percent, ssid: (w && w.ssid) || null } : null;
+}
+
+async function sample() {
+  findRouter();
+  const [routerMs, inet] = await Promise.all([
+    router.ip ? pingOnce(router.ip) : null,
+    pingOnce('1.1.1.1').then((ms) => (ms != null ? ms : pingOnce('8.8.8.8'))),
+  ]);
+  router.ms = routerMs;
+  if (router.ip) {
+    router.results.push(routerMs != null);
     if (router.results.length > 20) router.results.shift();
-    setTimeout(pingRouter, 2000);
-  });
+  } else router.results = [];
+  fails.router = routerMs == null ? fails.router + 1 : 0;
+  fails.internet = inet == null ? fails.internet + 1 : 0;
+  const w = readWifi();
+  track(causeFor(w), w);
+  setTimeout(sample, 2000);
+}
+
+function dropReport() {
+  const since = Date.now() - 24 * 3600 * 1000;
+  const recent = drops.filter((e) => e.end >= since);
+  if (ongoing && ongoing.end - ongoing.start >= 4000) recent.push({ ...ongoing, ongoing: true });
+  const counts = { wifi: 0, weak: 0, router: 0, internet: 0 };
+  const seconds = { wifi: 0, weak: 0, router: 0, internet: 0 };
+  for (const e of recent) { counts[e.cause]++; seconds[e.cause] += Math.round((e.end - e.start) / 1000); }
+  return { counts, seconds, events: recent.slice(-20).reverse() };
 }
 
 function healthFor(w) {
@@ -131,13 +197,14 @@ const HOSTED_ORIGIN = 'https://ir-wifi-signal.vercel.app';
 const server = http.createServer((req, res) => {
   const url = new URL(req.url, 'http://local');
   // Lets only the hosted page read Wi-Fi status from this Mac over localhost.
-  if (req.headers.origin === HOSTED_ORIGIN && url.pathname === '/api/status') {
+  if (req.headers.origin === HOSTED_ORIGIN && (url.pathname === '/api/status' || url.pathname === '/api/drops')) {
     res.setHeader('Access-Control-Allow-Origin', HOSTED_ORIGIN);
     res.setHeader('Access-Control-Allow-Private-Network', 'true');
     if (req.method === 'OPTIONS') { res.writeHead(204); return res.end(); }
   }
   if (req.method !== 'GET') return send(res, 405, 'text/plain', 'Method not allowed');
   if (url.pathname === '/') return fs.readFile(PAGE, (e, b) => (e ? send(res, 500, 'text/plain', 'Page missing') : send(res, 200, 'text/html; charset=utf-8', b)));
+  if (url.pathname === '/api/drops') return send(res, 200, 'application/json', JSON.stringify(dropReport()));
   if (url.pathname === '/api/status') return send(res, 200, 'application/json', JSON.stringify(status(req)));
   if (url.pathname === '/api/ping') return send(res, 200, 'text/plain', 'ok');
   if (url.pathname === '/api/blob') {
@@ -155,7 +222,7 @@ function lanAddress() {
 
 buildHelper();
 startHelper();
-pingRouter();
+sample();
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`\nSignal is running.\n  On this Mac:  http://localhost:${PORT}`);
   const ip = lanAddress();
