@@ -1,0 +1,28 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace = 'app.signal.tracker'
+    compileSdk = 36
+
+    defaultConfig {
+        applicationId = 'app.signal.tracker'
+        minSdk = 28
+        targetSdk = 36
+        versionCode = 1
+        versionName = '1.0'
+    }
+
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
+}
+
+// The app shows the same page as the website, copied in at build time.
+def copyPage = tasks.register('copyPage', Copy) {
+    from '../../public/index.html'
+    into 'src/main/assets'
+}
+tasks.named('preBuild') { dependsOn copyPage }

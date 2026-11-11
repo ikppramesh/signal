@@ -175,7 +175,7 @@ button.ghost{width:auto;flex:none;padding:0 22px;margin:0;background:transparent
         <thead><tr><th>Device</th><th>Type</th><th>IP address</th><th>Maker</th><th>Status</th><th>Data use</th></tr></thead>
         <tbody id="devRows"></tbody>
       </table>
-      <p class="note" id="devNote">Data use is shown for this Mac only. Other devices' traffic goes straight to the router, so only the router can measure it.</p>
+      <p class="note" id="devNote">Data use is shown for this device only. Other devices' traffic goes straight to the router, so only the router can measure it.</p>
     </div>
   </section>
 </main>
@@ -481,7 +481,7 @@ let lanMbps = null;
 async function probe() {
   const t = performance.now();
   try {
-    const url = source === 'browser' ? '/?probe=' + t : '/api/ping?' + t;
+    const url = source === 'browser' ? '/?probe=' + t : source === 'native' ? `https://speed.cloudflare.com/__down?bytes=0&r=${t}` : '/api/ping?' + t;
     const r = await fetch(url, { method: source === 'browser' ? 'HEAD' : 'GET', cache: 'no-store', signal: AbortSignal.timeout(2000) });
     await r.text();
     probes.push(performance.now() - t);
@@ -491,7 +491,7 @@ async function probe() {
 async function measureLan() {
   try {
     const t = performance.now();
-    const url = source === 'browser' ? `https://speed.cloudflare.com/__down?bytes=262144&r=${t}` : '/api/blob?kb=512&' + t;
+    const url = source === 'browser' || source === 'native' ? `https://speed.cloudflare.com/__down?bytes=262144&r=${t}` : '/api/blob?kb=512&' + t;
     const r = await fetch(url, { cache: 'no-store', signal: AbortSignal.timeout(4000) });
     const b = await r.arrayBuffer();
     lanMbps = Math.round(b.byteLength * 8 / ((performance.now() - t) / 1000) / 1e6);
@@ -550,6 +550,7 @@ function demoStatus() {
 
 /* Local server when there is one, then the Mac helper on localhost, otherwise browser-only measurements. */
 async function findSource() {
+  if (window.SignalNative) return 'native';
   if (await reachable('', 1200)) return '';
   return 'browser';
 }
@@ -581,6 +582,28 @@ function connectionName() {
   if (c && c.type === 'cellular') return 'Mobile data';
   if (c && c.type === 'ethernet') return 'Ethernet';
   return 'Your connection';
+}
+
+/* Android app on mobile data: real signal from the phone's modem. */
+function renderCellular(s) {
+  const c = s.cellular, q = linkQuality(25, 800);
+  $('netLabel').textContent = 'Mobile data';
+  $('ssid').textContent = c.carrier || 'Mobile network';
+  $('metric').textContent = 'Mobile signal';
+  $('pill').textContent = c.dbm == null ? `${c.bars} of 4 bars` : `${c.dbm} dBm`;
+  setHero(c.percent);
+  if (c.percent < 40) showAlert('Your mobile signal is very low', 'Move near a window or outdoors.', `${c.percent}%`);
+  else if (c.percent < 60) showAlert('Your mobile signal is weak', 'Move to a spot with better coverage.', `${c.percent}%`);
+  else showAlert('');
+  renderStar([{ id: 'current', percent: c.percent, label: c.carrier || 'Mobile', current: true }]);
+  $('starTitle').textContent = 'Networks around you';
+  $('starSub').textContent = 'On mobile data. Turn on Wi-Fi to see nearby networks.';
+  $('nameNote').hidden = true;
+  $('healthSay').textContent = 'Measured from this phone over mobile data.';
+  $('stats').innerHTML = stat('Signal', c.dbm ?? '--', 'dBm') + stat('Bars', c.bars, 'of 4') +
+    stat('Latency', q.ms == null ? '--' : Math.round(q.ms), 'ms') + stat('Packet loss', q.loss, '%') + stat('Live speed', lanMbps, 'Mbps');
+  $('linkLabel').textContent = 'Live speed';
+  $('link').textContent = lanMbps ?? '--';
 }
 
 function renderBrowser() {
@@ -616,6 +639,12 @@ async function poll() {
       lookForMac();
       await probe();
       renderBrowser();
+      return setTimeout(poll, 1000);
+    }
+    if (source === 'native') {
+      const s = JSON.parse(window.SignalNative.status());
+      failures = 0;
+      if (s.cellular) { await probe(); renderCellular(s); } else render(s);
       return setTimeout(poll, 1000);
     }
     const r = await fetch(source + '/api/status', { cache: 'no-store', signal: AbortSignal.timeout(3000) });
@@ -662,6 +691,10 @@ async function loadDevices(fresh) {
     $('devRows').innerHTML = ''; $('devChips').innerHTML = ''; $('scan').hidden = true;
     return;
   }
+  if (source === 'native') {
+    renderDevices(JSON.parse(window.SignalNative.devices(fresh)));
+    return;
+  }
   if (fresh) { $('scan').disabled = true; $('scan').textContent = 'Scanning…'; }
   try {
     const r = await (await fetch(source + '/api/devices' + (fresh ? '?scan' : ''), { cache: 'no-store' })).json();
@@ -670,8 +703,29 @@ async function loadDevices(fresh) {
   $('scan').disabled = false; $('scan').textContent = 'Scan now';
 }
 
+/* Same rules as the Mac scanner, for lists that arrive without a type. */
+function classifyDevice(d) {
+  const model = d.model || '', s = new Set(d.services || []);
+  const text = `${d.name} ${model} ${d.vendor || ''}`.toLowerCase();
+  const has = (...t) => t.some((x) => s.has(x));
+  if (d.isRouter) return 'Router';
+  if (/^ipad/i.test(model) || /\bipad\b/.test(text)) return 'Tablet';
+  if (/^iphone/i.test(model) || /\biphone\b/.test(text)) return 'Phone';
+  if (/^appletv/i.test(model) || /apple ?tv/.test(text)) return 'TV';
+  if (/^(mac|imac|macbook)/i.test(model) || /macbook|imac|mac mini|mac studio/.test(text)) return 'Computer';
+  if (has('_ipp._tcp', '_ipps._tcp', '_printer._tcp', '_pdl-datastream._tcp', '_scanner._tcp') || /\b(hp|epson|canon|brother|kyocera|xerox)\b/.test(text)) return 'Printer';
+  if (has('_googlecast._tcp', '_androidtvremote2._tcp', '_amzn-wplay._tcp', '_airplay._tcp') || /\b(tv|bravia|roku|fire ?tv|chromecast)\b/.test(text))
+    return /speaker|nest audio|home mini/.test(text) ? 'Speaker' : 'TV';
+  if (has('_sonos._tcp', '_spotify-connect._tcp', '_raop._tcp') || /homepod|sonos|echo|speaker/.test(text)) return 'Speaker';
+  if (has('_hap._tcp', '_homekit._tcp', '_matter._tcp') || /espressif|tuya|shelly|philips|xiaomi|wyze|ring|nest|camera/.test(text)) return 'Smart home';
+  if (/samsung|galaxy|oneplus|oppo|vivo|realme|motorola|pixel|android/.test(text)) return 'Phone or tablet';
+  return 'Unknown';
+}
+
 function renderDevices(r) {
   const list = r.devices || [];
+  for (const d of list) if (!d.type) d.type = classifyDevice(d);
+  if (r.scanning && !list.length) { $('devCount').textContent = '--'; $('devSay').textContent = 'Scanning your network…'; return; }
   const connected = list.filter((d) => d.status !== 'offline');
   $('devCount').textContent = connected.length;
   $('devNet').textContent = `Devices on ${$('ssid').textContent || 'this network'}`;
@@ -685,7 +739,7 @@ function renderDevices(r) {
   $('devRows').innerHTML = list.map((d) => {
     const status = d.status === 'online' ? ['Online', '#4ade80'] : d.status === 'idle' ? ['Idle', '#fbbf24'] : [`Seen ${seen(d.lastSeen)}`, 'var(--dim)'];
     const use = d.isSelf ? `↓ ${r.self.downMbps} · ↑ ${r.self.upMbps} Mbps` : 'Router only';
-    const title = d.isSelf ? `${d.name || 'This Mac'} (this Mac)` : d.name || d.model || (d.vendor && d.vendor !== 'Private address' ? `${d.vendor} device` : 'Unnamed device');
+    const title = d.isSelf ? `${d.name || 'This device'} (this device)` : d.name || d.model || (d.vendor && d.vendor !== 'Private address' ? `${d.vendor} device` : 'Unnamed device');
     return `<tr class="${d.status === 'offline' ? 'offline' : ''}">
       <td><div class="dev"><em>${ICONS[d.type] || '❔'}</em><div>${esc(title)}<small>${esc(d.model && d.model !== title ? d.model : d.mac || '')}</small></div></div></td>
       <td data-label="Type">${esc(d.type)}</td>
@@ -719,7 +773,7 @@ function dropVerdict(r) {
 }
 
 async function loadDrops() {
-  if (DEMO || source === null || source === 'browser') { $('dropCard').hidden = true; return; }
+  if (DEMO || source === null || source === 'browser' || source === 'native') { $('dropCard').hidden = true; return; }
   try {
     const r = await (await fetch(source + '/api/drops', { cache: 'no-store' })).json();
     $('dropCard').hidden = false;
