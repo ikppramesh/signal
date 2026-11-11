@@ -126,8 +126,16 @@ function send(res, code, type, body) {
   res.end(body);
 }
 
+const HOSTED_ORIGIN = 'https://ir-wifi-signal.vercel.app';
+
 const server = http.createServer((req, res) => {
   const url = new URL(req.url, 'http://local');
+  // Lets only the hosted page read Wi-Fi status from this Mac over localhost.
+  if (req.headers.origin === HOSTED_ORIGIN && url.pathname === '/api/status') {
+    res.setHeader('Access-Control-Allow-Origin', HOSTED_ORIGIN);
+    res.setHeader('Access-Control-Allow-Private-Network', 'true');
+    if (req.method === 'OPTIONS') { res.writeHead(204); return res.end(); }
+  }
   if (req.method !== 'GET') return send(res, 405, 'text/plain', 'Method not allowed');
   if (url.pathname === '/') return fs.readFile(PAGE, (e, b) => (e ? send(res, 500, 'text/plain', 'Page missing') : send(res, 200, 'text/html; charset=utf-8', b)));
   if (url.pathname === '/api/status') return send(res, 200, 'application/json', JSON.stringify(status(req)));

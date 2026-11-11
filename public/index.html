@@ -382,12 +382,14 @@ function renderOffline(title, sub) {
 }
 
 /* Phones cannot read their own radio from a browser, so link quality is estimated from timing to the Mac. */
+let source = null;
 const probes = [];
 let lanMbps = null;
 async function probe() {
   const t = performance.now();
   try {
-    const r = await fetch('/api/ping?' + t, { cache: 'no-store', signal: AbortSignal.timeout(1500) });
+    const url = source === 'browser' ? '/?probe=' + t : '/api/ping?' + t;
+    const r = await fetch(url, { method: source === 'browser' ? 'HEAD' : 'GET', cache: 'no-store', signal: AbortSignal.timeout(2000) });
     await r.text();
     probes.push(performance.now() - t);
   } catch { probes.push(null); }
@@ -396,17 +398,18 @@ async function probe() {
 async function measureLan() {
   try {
     const t = performance.now();
-    const r = await fetch('/api/blob?kb=512&' + t, { cache: 'no-store', signal: AbortSignal.timeout(4000) });
+    const url = source === 'browser' ? `https://speed.cloudflare.com/__down?bytes=262144&r=${t}` : '/api/blob?kb=512&' + t;
+    const r = await fetch(url, { cache: 'no-store', signal: AbortSignal.timeout(4000) });
     const b = await r.arrayBuffer();
     lanMbps = Math.round(b.byteLength * 8 / ((performance.now() - t) / 1000) / 1e6);
   } catch { lanMbps = 0; }
 }
-function linkQuality() {
+function linkQuality(best = 10, worst = 400) {
   const ok = probes.filter((v) => v != null).sort((a, b) => a - b);
   if (!ok.length) return { percent: 0, ms: null, loss: 100 };
   const ms = ok[Math.floor(ok.length * 0.25)];
   const loss = (probes.length - ok.length) / probes.length;
-  const timing = clamp(1 - Math.log(Math.max(ms, 10) / 10) / Math.log(40), 0, 1);
+  const timing = clamp(1 - Math.log(Math.max(ms, best) / best) / Math.log(worst / best), 0, 1);
   return { percent: Math.round(100 * timing * (1 - loss)), ms, loss: Math.round(loss * 100) };
 }
 function renderRemote(s) {
@@ -452,11 +455,57 @@ function demoStatus() {
   };
 }
 
+/* Local server when there is one, then the Mac helper on localhost, otherwise browser-only measurements. */
+async function findSource() {
+  for (const base of ['', 'http://localhost:8787']) {
+    try {
+      const r = await fetch(base + '/api/status', { cache: 'no-store', signal: AbortSignal.timeout(1200) });
+      if (r.ok && (await r.json()).viewer) return base;
+    } catch {}
+  }
+  return 'browser';
+}
+
+function connectionName() {
+  const c = navigator.connection;
+  if (c && c.type === 'wifi') return 'Wi-Fi';
+  if (c && c.type === 'cellular') return 'Mobile data';
+  if (c && c.type === 'ethernet') return 'Ethernet';
+  return 'Your connection';
+}
+
+function renderBrowser() {
+  const name = connectionName(), c = navigator.connection;
+  $('netLabel').textContent = 'Connected through';
+  $('metric').textContent = 'Connection quality · estimated';
+  $('starTitle').textContent = 'Nearby networks';
+  $('starSub').textContent = 'Browsers cannot scan for networks. Run Signal on your Mac and open this page there to see them.';
+  $('star').style.display = 'none';
+  $('healthSay').textContent = 'Measured from this device over the internet.';
+  $('linkLabel').textContent = 'Live speed';
+  if (!navigator.onLine) { probes.length = 0; return renderOffline('No connection', 'No signal'); }
+  const q = linkQuality(25, 800);
+  $('ssid').textContent = name;
+  $('pill').textContent = q.ms == null ? 'No link' : `${Math.round(q.ms)} ms`;
+  setHero(q.percent, q.percent >= 60 ? levelFor(q.percent).name + ' connection' : q.percent >= 40 ? 'Your connection is weak' : q.percent > 0 ? 'Connection is very low' : 'No connection');
+  if (q.percent > 0 && q.percent < 60) showAlert(q.percent < 40 ? 'Your connection is very low' : 'Your connection is weak', 'Move to a spot with better coverage.', `${q.percent}%`);
+  else showAlert('');
+  $('stats').innerHTML = stat('Latency', q.ms == null ? '--' : Math.round(q.ms), 'ms') + stat('Packet loss', q.loss, '%') +
+    stat('Live speed', lanMbps, 'Mbps') + stat('Speed class', c && c.effectiveType ? c.effectiveType.toUpperCase() : '--', '');
+  $('link').textContent = lanMbps ?? '--';
+}
+
 let failures = 0;
 async function poll() {
   if (DEMO) { render(demoStatus()); $('pill').textContent = 'Demo'; return setTimeout(poll, 1000); }
   try {
-    const r = await fetch('/api/status', { cache: 'no-store', signal: AbortSignal.timeout(3000) });
+    if (source === null) source = await findSource();
+    if (source === 'browser') {
+      await probe();
+      renderBrowser();
+      return setTimeout(poll, 1000);
+    }
+    const r = await fetch(source + '/api/status', { cache: 'no-store', signal: AbortSignal.timeout(3000) });
     const s = await r.json();
     failures = 0;
     if (s.viewer === 'remote') await probe();
@@ -467,7 +516,7 @@ async function poll() {
   setTimeout(poll, 1000);
 }
 poll();
-setInterval(() => { if (!DEMO && probes.length) measureLan(); }, 6000);
+setInterval(() => { if (!DEMO && probes.length && !document.hidden) measureLan(); }, 15000);
 
 /* ---------- Internet speed test ---------- */
 const CF = 'https://speed.cloudflare.com';
