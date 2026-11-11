@@ -59,6 +59,8 @@ public class NativeBridge {
     private static final Pattern PING_TIME = Pattern.compile("time=([\\d.]+)");
 
     private final Context ctx;
+    private final MainActivity activity;
+    private final Traffic traffic;
     private final WifiManager wifi;
     private final ConnectivityManager cm;
     private final TelephonyManager tel;
@@ -75,8 +77,10 @@ public class NativeBridge {
     private String knownNetwork;
     private final Map<String, JSONObject> known = new ConcurrentHashMap<>();
 
-    NativeBridge(Context context) {
+    NativeBridge(MainActivity context) {
+        activity = context;
         ctx = context.getApplicationContext();
+        traffic = new Traffic(ctx);
         wifi = (WifiManager) ctx.getSystemService(Context.WIFI_SERVICE);
         cm = (ConnectivityManager) ctx.getSystemService(Context.CONNECTIVITY_SERVICE);
         tel = (TelephonyManager) ctx.getSystemService(Context.TELEPHONY_SERVICE);
@@ -231,6 +235,28 @@ public class NativeBridge {
         String carrier = tel.getNetworkOperatorName();
         c.put("carrier", carrier == null || carrier.isEmpty() ? JSONObject.NULL : carrier);
         return c;
+    }
+
+    /* ---------------- Traffic ---------------- */
+
+    @JavascriptInterface
+    public String traffic() {
+        try { return traffic.report().toString(); } catch (Exception e) { return "{}"; }
+    }
+
+    @JavascriptInterface
+    public void openUsageAccess() {
+        activity.runOnUiThread(activity::openUsageAccess);
+    }
+
+    @JavascriptInterface
+    public void startWebsiteLog() {
+        activity.runOnUiThread(activity::startWebsiteLog);
+    }
+
+    @JavascriptInterface
+    public void stopWebsiteLog() {
+        activity.runOnUiThread(activity::stopWebsiteLog);
     }
 
     /* ---------------- Devices ---------------- */

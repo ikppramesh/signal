@@ -251,4 +251,11 @@ async function report(fresh) {
   return { ...latest, self: { downMbps: +usage.down.toFixed(2), upMbps: +usage.up.toFixed(2) }, scanning: Boolean(scanning) };
 }
 
-module.exports = { start, report };
+/** Friendly name for an address from the latest scan, for the website log. */
+function nameFor(ip) {
+  const d = latest && latest.devices.find((x) => x.ip === ip && x.status !== 'offline');
+  if (!d) return null;
+  return d.isSelf ? `${d.name} (this Mac)` : d.name || d.model || (d.type !== 'Unknown' ? d.type : null);
+}
+
+module.exports = { start, report, nameFor };

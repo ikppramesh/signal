@@ -2,7 +2,11 @@ package app.signal.tracker;
 
 import android.Manifest;
 import android.app.Activity;
+import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.net.Uri;
+import android.net.VpnService;
+import android.provider.Settings;
 import android.os.Build;
 import android.os.Bundle;
 import android.view.WindowInsets;
@@ -56,6 +60,33 @@ public class MainActivity extends Activity {
             if (checkSelfPermission(p) != PackageManager.PERMISSION_GRANTED) missing.add(p);
         }
         if (!missing.isEmpty()) requestPermissions(missing.toArray(new String[0]), 1);
+    }
+
+    private static final int VPN_REQUEST = 2;
+
+    void openUsageAccess() {
+        Intent i = new Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS);
+        i.setData(Uri.parse("package:" + getPackageName()));
+        try { startActivity(i); } catch (Exception e) { startActivity(new Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)); }
+    }
+
+    /** Android asks the user once to allow the VPN, then the log starts. */
+    void startWebsiteLog() {
+        Intent consent = VpnService.prepare(this);
+        if (consent != null) startActivityForResult(consent, VPN_REQUEST);
+        else onActivityResult(VPN_REQUEST, RESULT_OK, null);
+    }
+
+    void stopWebsiteLog() {
+        startService(new Intent(this, DnsVpnService.class).setAction(DnsVpnService.ACTION_STOP));
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == VPN_REQUEST && resultCode == RESULT_OK) {
+            startService(new Intent(this, DnsVpnService.class).setAction(DnsVpnService.ACTION_START));
+        }
     }
 
     @Override

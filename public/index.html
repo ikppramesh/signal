@@ -59,6 +59,40 @@ button:disabled{opacity:.6;cursor:default}
 button:focus-visible{outline:3px solid var(--c);outline-offset:2px}
 #spark{display:block;width:100%;height:90px;margin-top:12px}
 .note{font-size:13px;line-height:1.4;color:var(--dim);margin-top:12px}
+#tabTraffic{display:grid;gap:14px;margin-top:24px}
+#tabTraffic[hidden]{display:none}
+.useGrid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:16px}
+.useRow{display:flex;align-items:baseline;gap:8px;margin-top:4px}
+.useRow span{font-size:22px;font-weight:900;color:#8b7cf6}
+.useRow.up span{color:#4ade80}
+.useRow b{font-size:clamp(28px,8vw,44px);font-weight:900;letter-spacing:-.03em;font-variant-numeric:tabular-nums}
+.bars{display:grid;grid-template-columns:repeat(14,1fr);gap:6px;height:140px;margin-top:20px}
+.bar{display:flex;flex-direction:column;align-items:center;gap:6px;min-width:0}
+.bar .stack{flex:1;width:100%;display:flex;flex-direction:column;justify-content:flex-end;border-radius:6px;overflow:hidden;background:rgba(255,255,255,.04)}
+.bar i{display:block;width:100%}
+.bar small{font-size:11px;color:var(--dim)}
+.legend{display:flex;gap:16px;margin-top:10px;font-size:13px;color:var(--dim)}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px}
+.wideBtn{width:100%;margin-top:16px}
+.apps,.setup{list-style:none;padding:0;margin-top:14px;display:grid;gap:6px}
+.apps li{display:flex;justify-content:space-between;gap:12px;padding:10px 0;border-top:1px solid var(--line);font-weight:700;font-size:15px}
+.apps li.head{border:0;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--dim)}
+.apps small{color:var(--dim);font-weight:600;white-space:nowrap}
+.setup{counter-reset:s;list-style:none}
+.setup li{counter-increment:s;padding:12px 14px 12px 44px;position:relative;border-radius:12px;background:rgba(255,255,255,.04);font-size:15px;line-height:1.4}
+.setup li::before{content:counter(s);position:absolute;left:14px;top:12px;font-weight:900;color:#8b7cf6}
+.webHead{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
+.group{border-top:1px solid var(--line);margin-top:10px}
+.groupHead{display:flex;justify-content:space-between;align-items:center;width:100%;margin:0;min-height:56px;padding:8px 0;background:none;color:#fff;border-radius:0;text-align:left;font-size:16px}
+.groupHead span small{display:block;font-size:13px;color:var(--dim);font-weight:500}
+.groupHead b{font-size:22px;font-weight:900;font-variant-numeric:tabular-nums}
+.sites{width:100%;border-collapse:collapse;font-size:14px;margin-bottom:10px}
+.sites th{text-align:left;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--dim);padding:6px 8px}
+.sites td{padding:9px 8px;border-top:1px solid var(--line);vertical-align:top}
+.sites td small{display:block;font-size:12px;color:var(--dim);overflow-wrap:anywhere}
+.sites td b{overflow-wrap:anywhere}
+.sites .mono{font-variant-numeric:tabular-nums;white-space:nowrap}
+@media(max-width:560px){.sites th:nth-child(4),.sites td:nth-child(4){display:none}}
 .tabs{display:flex;gap:6px;padding:5px;margin:16px auto 0;width:max-content;max-width:100%;border-radius:99px;background:var(--card);border:1px solid var(--line)}
 .tabs button{width:auto;margin:0;min-height:40px;padding:0 22px;font-size:15px;border-radius:99px;background:transparent;color:var(--dim)}
 .tabs button[aria-selected="true"]{background:#fff;color:#000}
@@ -108,6 +142,7 @@ button.ghost{width:auto;flex:none;padding:0 22px;margin:0;background:transparent
   <nav class="tabs" role="tablist">
     <button role="tab" id="tabBtnSignal" aria-selected="true">Signal</button>
     <button role="tab" id="tabBtnDevices" aria-selected="false">Devices</button>
+    <button role="tab" id="tabBtnTraffic" aria-selected="false">Traffic</button>
   </nav>
 
   <div id="tabSignal">
@@ -159,6 +194,31 @@ button.ghost{width:auto;flex:none;padding:0 22px;margin:0;background:transparent
     </section>
   </div>
   </div>
+
+  <section id="tabTraffic" hidden>
+    <div class="card trafficCard">
+      <h2>Data used</h2>
+      <p class="sub" id="useScope">Loading…</p>
+      <div class="useGrid">
+        <div><div class="label">Today</div><div class="useRow"><span>↓</span><b id="useTodayDown">--</b></div><div class="useRow up"><span>↑</span><b id="useTodayUp">--</b></div></div>
+        <div><div class="label" id="useLifeLabel">Lifetime</div><div class="useRow"><span>↓</span><b id="useLifeDown">--</b></div><div class="useRow up"><span>↑</span><b id="useLifeUp">--</b></div></div>
+      </div>
+      <div class="bars" id="useBars" aria-label="Download and upload for the last 14 days"></div>
+      <div class="legend"><span><i style="background:#8b7cf6"></i>Download</span><span><i style="background:#4ade80"></i>Upload</span></div>
+      <button class="ghost wideBtn" id="usagePermit" hidden>Allow usage access</button>
+      <ol class="apps" id="useApps"></ol>
+    </div>
+
+    <div class="card trafficCard">
+      <div class="webHead">
+        <div><h2>Websites</h2><p class="sub" id="webScope">Loading…</p></div>
+        <button class="ghost" id="webToggle" hidden>Start</button>
+      </div>
+      <ol class="setup" id="webSetup" hidden></ol>
+      <div id="webGroups"></div>
+      <p class="note">Shows the names of websites and services each device looks up, not page contents, which are encrypted. Locations are approximate and come from each server's address.</p>
+    </div>
+  </section>
 
   <section id="tabDevices" hidden>
     <div class="devHead">
@@ -664,18 +724,19 @@ poll();
 /* ---------- Devices tab ---------- */
 const ICONS = { Router: '📡', Computer: '💻', Phone: '📱', Tablet: '📱', 'Phone or tablet': '📱', TV: '📺', Printer: '🖨️', Speaker: '🔊', 'Smart home': '🏠', Unknown: '❔' };
 let devTimer = null;
+const TABS = ['signal', 'devices', 'traffic'];
+const cap = (t) => t[0].toUpperCase() + t.slice(1);
 function showTab(name) {
-  const devicesOn = name === 'devices';
-  $('tabSignal').hidden = devicesOn;
-  $('tabDevices').hidden = !devicesOn;
-  $('tabBtnSignal').setAttribute('aria-selected', String(!devicesOn));
-  $('tabBtnDevices').setAttribute('aria-selected', String(devicesOn));
+  for (const t of TABS) {
+    $('tab' + cap(t)).hidden = t !== name;
+    $('tabBtn' + cap(t)).setAttribute('aria-selected', String(t === name));
+  }
   try { localStorage.setItem('signal-tab', name); } catch {}
   clearInterval(devTimer);
-  if (devicesOn) { loadDevices(false); devTimer = setInterval(() => loadDevices(false), 5000); }
+  if (name === 'devices') { loadDevices(false); devTimer = setInterval(() => loadDevices(false), 5000); }
+  if (name === 'traffic') { loadTraffic(); devTimer = setInterval(loadTraffic, 5000); }
 }
-$('tabBtnSignal').onclick = () => showTab('signal');
-$('tabBtnDevices').onclick = () => showTab('devices');
+for (const t of TABS) $('tabBtn' + cap(t)).onclick = () => showTab(t);
 $('scan').onclick = () => loadDevices(true);
 
 function seen(ms) {
@@ -749,6 +810,88 @@ function renderDevices(r) {
       <td data-label="Data use" class="mono">${use}</td></tr>`;
   }).join('');
 }
+
+/* ---------- Traffic tab ---------- */
+const bytes = (n) => {
+  if (!n) return '0 MB';
+  const u = ['B', 'KB', 'MB', 'GB', 'TB'];
+  const i = Math.min(u.length - 1, Math.floor(Math.log(n) / Math.log(1024)));
+  return `${(n / 1024 ** i).toFixed(i >= 3 ? 2 : i === 2 ? 1 : 0)} ${u[i]}`;
+};
+const flag = (code) => code ? String.fromCodePoint(...[...code.toUpperCase()].map((c) => 127397 + c.charCodeAt(0))) : '';
+let openGroup = null;
+
+async function loadTraffic() {
+  if (source === null) return;
+  if (source === 'browser') {
+    $('useScope').textContent = 'Data totals need the Signal app on Android or Signal running on your Mac.';
+    $('webScope').textContent = 'Website logging needs the Signal app on Android or Signal running on your Mac.';
+    return;
+  }
+  try {
+    const r = source === 'native' ? JSON.parse(window.SignalNative.traffic())
+      : await (await fetch(source + '/api/traffic', { cache: 'no-store' })).json();
+    renderUsage(r.usage);
+    renderWebsites(r.websites);
+  } catch { $('useScope').textContent = 'Could not load traffic data.'; }
+}
+
+function renderUsage(u) {
+  $('usagePermit').hidden = u.permission !== false;
+  if (u.permission === false) {
+    $('useScope').textContent = 'Allow usage access so Signal can read this phone\'s data counters.';
+    return;
+  }
+  const since = new Date(u.lifetime.since).toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' });
+  $('useScope').textContent = `${u.scope}. ${u.note || ''}`;
+  $('useLifeLabel').textContent = `Since ${since}`;
+  $('useTodayDown').textContent = bytes(u.today.down);
+  $('useTodayUp').textContent = bytes(u.today.up);
+  $('useLifeDown').textContent = bytes(u.lifetime.down);
+  $('useLifeUp').textContent = bytes(u.lifetime.up);
+  const max = Math.max(1, ...u.days.map((d) => d.down + d.up));
+  $('useBars').innerHTML = u.days.map((d) => {
+    const day = new Date(d.date + 'T12:00').toLocaleDateString([], { weekday: 'narrow' });
+    return `<div class="bar" title="${d.date}: ↓ ${bytes(d.down)} ↑ ${bytes(d.up)}"><div class="stack"><i style="height:${(d.up / max) * 100}%;background:#4ade80"></i><i style="height:${(d.down / max) * 100}%;background:#8b7cf6"></i></div><small>${day}</small></div>`;
+  }).join('');
+  $('useApps').innerHTML = (u.apps || []).slice(0, 10).map((a) =>
+    `<li><span>${esc(a.name)}</span><small>↓ ${bytes(a.down)} · ↑ ${bytes(a.up)}</small></li>`).join('');
+  if (u.apps && u.apps.length) $('useApps').insertAdjacentHTML('afterbegin', '<li class="head">Top apps today</li>');
+}
+
+function renderWebsites(w) {
+  const groups = w.groups || [];
+  $('webScope').textContent = w.scope === 'This phone'
+    ? (w.active ? `Logging this phone's lookups. ${w.today} today.` : 'Turn on logging to record which websites this phone\'s apps contact.')
+    : (w.active ? `Logging every device on this network. ${w.today} lookups today.` : groups.length ? 'Logging is off. Showing earlier results.' : 'Not set up yet.');
+  $('webToggle').hidden = w.scope !== 'This phone';
+  $('webToggle').textContent = w.active ? 'Stop' : 'Start';
+  $('webSetup').hidden = !w.setup;
+  $('webSetup').innerHTML = (w.setup || []).map((s) => `<li>${esc(s)}</li>`).join('');
+  if (!groups.length) { $('webGroups').innerHTML = ''; return; }
+  if (!groups.some((g) => g.key === openGroup)) openGroup = groups[0].key;
+  $('webGroups').innerHTML = groups.map((g) => {
+    const open = g.key === openGroup;
+    const rows = open ? g.domains.slice(0, 40).map((d) => `<tr>
+        <td><b>${esc(d.domain)}</b>${d.examples && d.examples.length > 1 ? `<small>${esc(d.examples.slice(0, 2).join(', '))}</small>` : ''}</td>
+        <td class="mono">${d.count}</td>
+        <td>${d.country ? `${flag(d.code)} ${esc(d.city ? d.city + ', ' : '')}${esc(d.country)}` : '--'}<small>${esc(d.org || '')}</small></td>
+        <td class="mono">${seen(d.lastSeen)}</td></tr>`).join('') : '';
+    return `<div class="group${open ? ' open' : ''}">
+      <button class="groupHead" data-key="${esc(g.key)}"><span>${esc(g.title)}<small>${esc(g.sub || '')}</small></span><b>${g.total}</b></button>
+      ${open ? `<table class="sites"><thead><tr><th>Website</th><th>Lookups</th><th>Location</th><th>Last</th></tr></thead><tbody>${rows}</tbody></table>` : ''}
+    </div>`;
+  }).join('');
+  for (const b of document.querySelectorAll('.groupHead')) b.onclick = () => { openGroup = b.dataset.key; loadTraffic(); };
+}
+
+$('usagePermit').onclick = () => window.SignalNative && window.SignalNative.openUsageAccess();
+$('webToggle').onclick = () => {
+  if (!window.SignalNative) return;
+  if ($('webToggle').textContent === 'Stop') window.SignalNative.stopWebsiteLog();
+  else window.SignalNative.startWebsiteLog();
+  setTimeout(loadTraffic, 1500);
+};
 
 /* ---------- Drop recorder ---------- */
 const CAUSES = {
@@ -845,7 +988,8 @@ $('go').onclick = async () => {
 /* Reopen the last tab once everything above is defined. */
 let savedTab = null;
 try { savedTab = localStorage.getItem('signal-tab'); } catch {}
-if (location.hash === '#devices' || (savedTab === 'devices' && location.hash !== '#signal')) showTab('devices');
+const wanted = TABS.includes(location.hash.slice(1)) ? location.hash.slice(1) : savedTab;
+if (wanted && wanted !== 'signal' && TABS.includes(wanted)) showTab(wanted);
 </script>
 </body>
 </html>

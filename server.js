@@ -6,6 +6,7 @@ const os = require('os');
 const path = require('path');
 const { execFile, execFileSync, spawnSync } = require('child_process');
 const devices = require('./devices');
+const traffic = require('./traffic');
 
 const PORT = Number(process.env.PORT) || 8787;
 const ROOT = __dirname;
@@ -204,7 +205,7 @@ const HOSTED_ORIGIN = 'https://ir-wifi-signal.vercel.app';
 const server = http.createServer((req, res) => {
   const url = new URL(req.url, 'http://local');
   // Lets only the hosted page read Wi-Fi status from this Mac over localhost.
-  if (req.headers.origin === HOSTED_ORIGIN && ['/api/status', '/api/drops', '/api/devices'].includes(url.pathname)) {
+  if (req.headers.origin === HOSTED_ORIGIN && ['/api/status', '/api/drops', '/api/devices', '/api/traffic'].includes(url.pathname)) {
     res.setHeader('Access-Control-Allow-Origin', HOSTED_ORIGIN);
     res.setHeader('Access-Control-Allow-Private-Network', 'true');
     if (req.method === 'OPTIONS') { res.writeHead(204); return res.end(); }
@@ -216,6 +217,7 @@ const server = http.createServer((req, res) => {
       .then((r) => send(res, 200, 'application/json', JSON.stringify(r)))
       .catch(() => send(res, 500, 'text/plain', 'Scan failed'));
   }
+  if (url.pathname === '/api/traffic') return send(res, 200, 'application/json', JSON.stringify(traffic.report(devices.nameFor)));
   if (url.pathname === '/api/drops') return send(res, 200, 'application/json', JSON.stringify(dropReport()));
   if (url.pathname === '/api/status') return send(res, 200, 'application/json', JSON.stringify(status(req)));
   if (url.pathname === '/api/ping') return send(res, 200, 'text/plain', 'ok');
@@ -237,6 +239,7 @@ startHelper();
 setInterval(touchAlive, 5000).unref();
 sample();
 devices.start();
+traffic.start(() => router.ip);
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`\nSignal is running.\n  On this Mac:  http://localhost:${PORT}`);
   const ip = lanAddress();
