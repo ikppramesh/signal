@@ -8,6 +8,7 @@ import android.os.Bundle;
 import android.view.WindowInsets;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
+import android.widget.FrameLayout;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -27,8 +28,12 @@ public class MainActivity extends Activity {
         s.setDomStorageEnabled(true);
         s.setAllowFileAccess(true);
 
-        // Keep the page clear of the status and navigation bars.
-        web.setOnApplyWindowInsetsListener((v, insets) -> {
+        // Keep the page clear of the status and navigation bars. Padding goes on a container,
+        // because a WebView ignores its own padding.
+        FrameLayout root = new FrameLayout(this);
+        root.setBackgroundColor(0xFF07070C);
+        root.addView(web);
+        root.setOnApplyWindowInsetsListener((v, insets) -> {
             android.graphics.Insets bars = insets.getInsets(WindowInsets.Type.systemBars());
             v.setPadding(bars.left, bars.top, bars.right, bars.bottom);
             return WindowInsets.CONSUMED;
@@ -36,7 +41,7 @@ public class MainActivity extends Activity {
 
         bridge = new NativeBridge(this);
         web.addJavascriptInterface(bridge, "SignalNative");
-        setContentView(web);
+        setContentView(root);
         web.loadUrl("file:///android_asset/index.html");
         askPermissions();
     }
@@ -56,12 +61,17 @@ public class MainActivity extends Activity {
     @Override
     protected void onResume() {
         super.onResume();
+        web.onResume();
+        web.resumeTimers();
         bridge.start();
     }
 
     @Override
     protected void onPause() {
         super.onPause();
+        // Stop page timers too, so the app does not read Wi-Fi while it is in the background.
+        web.onPause();
+        web.pauseTimers();
         bridge.stop();
     }
 
