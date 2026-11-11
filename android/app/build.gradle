@@ -10,8 +10,9 @@ android {
         applicationId = 'app.signal.tracker'
         minSdk = 28
         targetSdk = 36
-        versionCode = 1
-        versionName = '1.0'
+        // Set by scripts/release-android.sh so every published APK upgrades the last one.
+        versionCode = (project.findProperty('signalVersionCode') ?: '1') as Integer
+        versionName = (project.findProperty('signalVersionName') ?: '1.0') as String
     }
 
     compileOptions {
