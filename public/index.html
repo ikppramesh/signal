@@ -125,6 +125,16 @@ const LEVELS = [
 ];
 const levelFor = (p) => LEVELS.find((l) => p >= l.min);
 
+/* Security grade for a network's encryption type, as read by the Mac helper. */
+function securityFor(type) {
+  if (!type) return { grade: 'Unknown', unsafe: false };
+  if (type === 'Open' || type === 'WEP') return { grade: 'Not secure', unsafe: true };
+  if (/^WPA(\/WPA2)?( Enterprise)?$/.test(type)) return { grade: 'Outdated', unsafe: true };
+  if (type.includes('WPA3')) return { grade: 'Strong', unsafe: false };
+  if (type === 'Enhanced Open') return { grade: 'Encrypted, no password', unsafe: false };
+  return { grade: 'Good', unsafe: false };
+}
+
 /* ---------- Big number ---------- */
 let shown = 0, target = 0, lastLevel = null;
 let lastFrame = performance.now();
@@ -309,7 +319,9 @@ function renderStar(list) {
     n.halo.setAttribute('class', item.best ? 'pulse' : '');
     n.line.setAttribute('stroke', item.current ? '#fff' : item.best ? '#4ade80' : 'rgba(170,160,255,.35)');
     n.p.textContent = item.percent;
-    n.n.textContent = (item.best ? '★ ' : '') + short(item.label);
+    n.n.textContent = (item.best ? '★ ' : '') + (item.unsafe ? '⚠ ' : '') + short(item.label);
+    n.n.style.fill = item.unsafe ? '#f87171' : '';
+    if (item.unsafe && !item.current) n.dot.setAttribute('stroke', '#f87171');
   }
 }
 
@@ -340,16 +352,16 @@ function showAlert(title, sub, num) {
 function renderNetworks(s, myPercent) {
   const margin = 15;
   const top = s.nearby.slice(0, MAX_NODES - (s.connected ? 1 : 0));
-  const best = s.connected && top[0] && top[0].percent >= myPercent + margin ? top[0] : null;
-  const items = top.map((n) => ({ id: n.id, percent: n.percent, label: nameOf(n), best: n === best }));
-  if (s.connected) items.unshift({ id: 'current', percent: s.percent, label: s.ssid || 'Connected', current: true });
+  const best = s.connected && top[0] && top[0].percent >= myPercent + margin && !securityFor(top[0].security).unsafe ? top[0] : null;
+  const items = top.map((n) => ({ id: n.id, percent: n.percent, label: nameOf(n), best: n === best, unsafe: securityFor(n.security).unsafe }));
+  if (s.connected) items.unshift({ id: 'current', percent: s.percent, label: s.ssid || 'Connected', current: true, unsafe: securityFor(s.security).unsafe });
   renderStar(items);
 
   const count = s.nearby.length;
   $('starTitle').textContent = 'Networks around you';
   $('starSub').textContent = s.viewer === 'remote'
     ? `As seen by the Mac running Signal. ${count} nearby.`
-    : `${count} nearby. Closer to the center means a stronger signal.`;
+    : `${count} nearby. Closer to the center means a stronger signal.${s.nearby.some((n) => securityFor(n.security).unsafe) ? ' ⚠ marks networks that are not secure.' : ''}`;
   $('nameNote').hidden = s.namesAvailable;
   $('nameNote').textContent = 'Names are hidden until you allow Location for SignalHelper in System Settings → Privacy & Security → Location Services.';
   return best;
@@ -362,7 +374,9 @@ function renderHost(s) {
   $('pill').textContent = `${s.rssi} dBm`;
   setHero(s.percent);
   const best = renderNetworks(s, s.percent);
-  if (best) showAlert(`${nameOf(best)} is stronger`, `${best.percent}% there, ${s.percent}% here. Consider switching.`, `+${best.percent - s.percent}`);
+  const sec = securityFor(s.security);
+  if (sec.unsafe) showAlert(s.security === 'Open' ? 'This network has no password' : `${s.security} is not secure`, 'Others nearby may see your traffic. Use HTTPS sites or a VPN.', '⚠');
+  else if (best) showAlert(`${nameOf(best)} is stronger`, `${best.percent}% there, ${s.percent}% here. Consider switching.`, `+${best.percent - s.percent}`);
   else if (s.percent < 40) showAlert('Your signal is very low', 'Move closer to your router.', `${s.percent}%`);
   else if (s.percent < 60) showAlert('Your signal is weak', 'Move closer to your router for better speed.', `${s.percent}%`);
   else showAlert('');
@@ -375,7 +389,14 @@ function renderStats(s) {
   $('stats').innerHTML =
     stat('Signal', s.rssi, 'dBm') + stat('Signal to noise', s.health.snr, 'dB') +
     stat('Router ping', s.router.ms == null ? '--' : s.router.ms.toFixed(1), 'ms') + stat('Packet loss', s.health.loss, '%') +
-    stat('Channel', s.channel, esc(s.band)) + stat('Width', s.width || '--', 'MHz');
+    stat('Channel', s.channel, `${esc(s.band)}${s.width ? ' · ' + s.width + ' MHz' : ''}`) +
+    securityStat(s.security);
+}
+
+function securityStat(type) {
+  const sec = securityFor(type);
+  const color = sec.unsafe ? '#f87171' : sec.grade === 'Unknown' ? '' : '#4ade80';
+  return `<div class="stat"><small>Security</small><b style="color:${color}">${esc(type || '--')}</b><i>${esc(sec.grade)}</i></div>`;
 }
 
 function renderOffline(title, sub) {

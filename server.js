@@ -90,7 +90,7 @@ function nearbyFor(w) {
     if (i === current || (w.ssid && n.ssid === w.ssid)) return;
     const id = n.ssid ? `s:${n.ssid}` : `c:${n.channel}:${i}`;
     if (!seen.has(id) || seen.get(id).rssi < n.rssi) {
-      seen.set(id, { id, ssid: n.ssid, rssi: n.rssi, percent: percentFor(n.rssi), channel: n.channel, band: n.band });
+      seen.set(id, { id, ssid: n.ssid, rssi: n.rssi, percent: percentFor(n.rssi), channel: n.channel, band: n.band, security: n.security || '' });
     }
   });
   return [...seen.values()].sort((a, b) => b.rssi - a.rssi);
@@ -115,7 +115,7 @@ function status(req) {
   if (w.connected) {
     Object.assign(out, {
       rssi: w.rssi, noise: w.noise, percent: percentFor(w.rssi), txRate: Math.round(w.txRate),
-      channel: w.channel, band: w.band, width: w.width, health: healthFor(w),
+      channel: w.channel, band: w.band, width: w.width, security: w.security || '', health: healthFor(w),
     });
   }
   return out;

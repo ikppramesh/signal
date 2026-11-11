@@ -26,6 +26,23 @@ func widthMHz(_ c: CWChannel?) -> Int {
     }
 }
 
+// Strongest first, so a mixed network reports its best mode.
+let securityOrder: [(CWSecurity, String)] = [
+    (.wpa3Enterprise, "WPA3 Enterprise"), (.wpa3Personal, "WPA3"), (.wpa3Transition, "WPA2/WPA3"),
+    (.wpa2Enterprise, "WPA2 Enterprise"), (.wpa2Personal, "WPA2"), (.enterprise, "WPA Enterprise"),
+    (.wpaEnterpriseMixed, "WPA/WPA2 Enterprise"), (.wpaEnterprise, "WPA Enterprise"), (.personal, "WPA2"),
+    (.wpaPersonalMixed, "WPA/WPA2"), (.wpaPersonal, "WPA"), (.OWE, "Enhanced Open"), (.oweTransition, "Enhanced Open"),
+    (.dynamicWEP, "WEP"), (.WEP, "WEP"), (.none, "Open"),
+]
+
+func securityName(_ s: CWSecurity) -> String {
+    securityOrder.first { $0.0 == s }?.1 ?? ""
+}
+
+func securityName(_ n: CWNetwork) -> String {
+    securityOrder.first { n.supportsSecurity($0.0) }?.1 ?? ""
+}
+
 final class Helper: NSObject, CLLocationManagerDelegate {
     let location = CLLocationManager()
     let queue = DispatchQueue(label: "scan")
@@ -61,6 +78,7 @@ final class Helper: NSObject, CLLocationManagerDelegate {
                     "channel": n.wlanChannel?.channelNumber ?? 0,
                     "band": bandName(n.wlanChannel),
                     "width": widthMHz(n.wlanChannel),
+                    "security": securityName(n),
                 ]
             }
             DispatchQueue.main.async {
@@ -94,6 +112,7 @@ final class Helper: NSObject, CLLocationManagerDelegate {
             "band": bandName(channel),
             "width": widthMHz(channel),
             "interface": wifi.interfaceName ?? "en0",
+            "security": connected ? securityName(wifi.security()) : "",
             "namesAvailable": authorized,
             "nearby": nearby,
             "scanError": scanError,
