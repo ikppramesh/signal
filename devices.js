@@ -127,7 +127,7 @@ async function bonjour() {
     const r = await withTimeout(dns.lookup(e.host, { family: 4 }).catch(() => null), 2500);
     if (!r) return;
     const d = byIp.get(r.address) || { names: [], services: new Set(), txt: {}, host: e.host };
-    d.names.push(e.name);
+    d.names.push(e.name.replace(/^[0-9A-F]{12}@/i, '')); // AirPlay prefixes names with a hardware code
     d.services.add(e.type);
     Object.assign(d.txt, e.txt);
     byIp.set(r.address, d);

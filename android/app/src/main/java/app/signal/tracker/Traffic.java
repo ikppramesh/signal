@@ -214,8 +214,13 @@ final class Traffic {
             }
             groups.put(new JSONObject().put("key", app).put("title", app).put("sub", "").put("total", totals.get(app)).put("domains", domains));
         }
-        return new JSONObject().put("scope", "This phone").put("enabled", f.exists()).put("active", DnsVpnService.running)
+        return new JSONObject().put("scope", "This phone").put("device", deviceName()).put("enabled", f.exists()).put("active", DnsVpnService.running)
             .put("today", todayCount).put("groups", groups);
+    }
+
+    private String deviceName() {
+        String name = android.provider.Settings.Global.getString(ctx.getContentResolver(), "device_name");
+        return name == null || name.isEmpty() ? android.os.Build.MODEL : name;
     }
 
     private void locate(String ip) {

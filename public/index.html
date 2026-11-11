@@ -97,8 +97,14 @@ button:focus-visible{outline:3px solid var(--c);outline-offset:2px}
 .sites td{padding:9px 8px;border-top:1px solid var(--line);vertical-align:top}
 .sites td small{display:block;font-size:12px;color:var(--dim);overflow-wrap:anywhere}
 .sites td b{overflow-wrap:anywhere}
+.webChips{margin:14px 0 0}
+.chip{width:auto;margin:0;min-height:38px;padding:0 14px;font-size:14px;font-weight:700;border-radius:99px;background:var(--card);color:#fff;border:1px solid var(--line)}
+.chip b{font-weight:900;margin-left:4px;color:var(--dim)}
+.chip.on{background:#fff;color:#000}
+.chip.on b{color:#555}
+.lookupNote{margin:10px 0 6px}
 .sites .mono{font-variant-numeric:tabular-nums;white-space:nowrap}
-@media(max-width:560px){.sites th:nth-child(4),.sites td:nth-child(4){display:none}}
+@media(max-width:560px){.sites th:nth-child(5),.sites td:nth-child(5){display:none}.sites td,.sites th{padding:8px 5px}}
 .tabs{display:flex;gap:6px;padding:5px;margin:16px auto 0;width:max-content;max-width:100%;border-radius:99px;background:var(--card);border:1px solid var(--line)}
 .tabs button{width:auto;margin:0;min-height:40px;padding:0 22px;font-size:15px;border-radius:99px;background:transparent;color:var(--dim)}
 .tabs button[aria-selected="true"]{background:#fff;color:#000}
@@ -831,7 +837,7 @@ const bytes = (n) => {
   return `${(n / 1024 ** i).toFixed(i >= 3 ? 2 : i === 2 ? 1 : 0)} ${u[i]}`;
 };
 const flag = (code) => code ? String.fromCodePoint(...[...code.toUpperCase()].map((c) => 127397 + c.charCodeAt(0))) : '';
-let openGroup = null;
+let openGroup = 'all';
 
 async function loadTraffic() {
   if (source === null) return;
@@ -933,20 +939,27 @@ function renderWebsites(w) {
   $('webSetup').hidden = !w.setup;
   $('webSetup').innerHTML = (w.setup || []).map((s) => `<li>${esc(s)}</li>`).join('');
   if (!groups.length) { $('webGroups').innerHTML = ''; return; }
-  if (!groups.some((g) => g.key === openGroup)) openGroup = groups[0].key;
-  $('webGroups').innerHTML = groups.map((g) => {
-    const open = g.key === openGroup;
-    const rows = open ? g.domains.slice(0, 40).map((d) => `<tr>
-        <td><b>${esc(d.domain)}</b>${d.examples && d.examples.length > 1 ? `<small>${esc(d.examples.slice(0, 2).join(', '))}</small>` : ''}</td>
-        <td class="mono">${d.count}</td>
-        <td>${d.country ? `${flag(d.code)} ${esc(d.city ? d.city + ', ' : '')}${esc(d.country)}` : '--'}<small>${esc(d.org || '')}</small></td>
-        <td class="mono">${seen(d.lastSeen)}</td></tr>`).join('') : '';
-    return `<div class="group${open ? ' open' : ''}">
-      <button class="groupHead" data-key="${esc(g.key)}"><span>${esc(g.title)}<small>${esc(g.sub || '')}</small></span><b>${g.total}</b></button>
-      ${open ? `<table class="sites"><thead><tr><th>Website</th><th>Lookups</th><th>Location</th><th>Last</th></tr></thead><tbody>${rows}</tbody></table>` : ''}
-    </div>`;
-  }).join('');
-  for (const b of document.querySelectorAll('.groupHead')) b.onclick = () => { openGroup = b.dataset.key; loadTraffic(); };
+  // One row per website per device (or per app on the phone), filterable by chip.
+  const rows = [];
+  for (const g of groups) for (const d of g.domains) {
+    rows.push({ ...d, group: g.key, device: w.device || g.title, detail: w.device ? g.title : g.sub });
+  }
+  if (openGroup !== 'all' && !groups.some((g) => g.key === openGroup)) openGroup = 'all';
+  const shown = rows.filter((r) => openGroup === 'all' || r.group === openGroup).sort((a, b) => b.count - a.count).slice(0, 80);
+  const total = groups.reduce((n, g) => n + g.total, 0);
+  const chip = (key, label, n) => `<button class="chip${openGroup === key ? ' on' : ''}" data-key="${esc(key)}">${esc(label)} <b>${n}</b></button>`;
+  $('webGroups').innerHTML = `
+    <div class="chips webChips">${chip('all', w.device ? 'All apps' : 'All devices', total)}${groups.map((g) => chip(g.key, g.title, g.total)).join('')}</div>
+    <p class="note lookupNote">Lookups: how many times the device asked for this website's address in the last 7 days. Apps do this each time they open a connection, so it shows how often a site is contacted, not how much data moved.</p>
+    <table class="sites"><thead><tr><th>Website</th><th>Lookups</th><th>Location</th><th>${w.device ? 'Device · App' : 'Device'}</th><th>Last</th></tr></thead><tbody>
+    ${shown.map((d) => `<tr>
+      <td><b>${esc(d.domain)}</b>${d.examples && d.examples.length > 1 ? `<small>${esc(d.examples.slice(0, 2).join(', '))}</small>` : ''}</td>
+      <td class="mono">${d.count}</td>
+      <td>${d.country ? `${flag(d.code)} ${esc(d.city ? d.city + ', ' : '')}${esc(d.country)}` : '--'}<small>${esc(d.org || '')}</small></td>
+      <td>${esc(d.device)}<small>${esc(d.detail || '')}</small></td>
+      <td class="mono">${seen(d.lastSeen)}</td></tr>`).join('')}
+    </tbody></table>`;
+  for (const b of document.querySelectorAll('.webChips .chip')) b.onclick = () => { openGroup = b.dataset.key; loadTraffic(); };
 }
 
 $('usagePermit').onclick = () => window.SignalNative && window.SignalNative.openUsageAccess();
