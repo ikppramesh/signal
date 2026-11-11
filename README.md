@@ -52,6 +52,15 @@ sudo node dns-monitor.js
 
 Then set your router's DNS server to the Mac's address and reconnect your devices. Every device's website lookups appear in the Traffic tab. Devices cannot load websites while the Mac is off, so set the router back if you stop using it.
 
+### Keep it running in the background
+
+```sh
+sudo scripts/install-services.sh             # install: both start at boot and restart if they stop
+sudo scripts/install-services.sh uninstall   # remove
+```
+
+This installs the Signal server (as your user) and the website log (on port 53) as macOS background services. Logs go to `build/server.log` and `build/dns-monitor.log`.
+
 ## Release a new APK
 
 ```sh
