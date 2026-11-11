@@ -5,6 +5,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { execFile, execFileSync, spawnSync } = require('child_process');
+const devices = require('./devices');
 
 const PORT = Number(process.env.PORT) || 8787;
 const ROOT = __dirname;
@@ -203,13 +204,18 @@ const HOSTED_ORIGIN = 'https://ir-wifi-signal.vercel.app';
 const server = http.createServer((req, res) => {
   const url = new URL(req.url, 'http://local');
   // Lets only the hosted page read Wi-Fi status from this Mac over localhost.
-  if (req.headers.origin === HOSTED_ORIGIN && (url.pathname === '/api/status' || url.pathname === '/api/drops')) {
+  if (req.headers.origin === HOSTED_ORIGIN && ['/api/status', '/api/drops', '/api/devices'].includes(url.pathname)) {
     res.setHeader('Access-Control-Allow-Origin', HOSTED_ORIGIN);
     res.setHeader('Access-Control-Allow-Private-Network', 'true');
     if (req.method === 'OPTIONS') { res.writeHead(204); return res.end(); }
   }
   if (req.method !== 'GET') return send(res, 405, 'text/plain', 'Method not allowed');
   if (url.pathname === '/') return fs.readFile(PAGE, (e, b) => (e ? send(res, 500, 'text/plain', 'Page missing') : send(res, 200, 'text/html; charset=utf-8', b)));
+  if (url.pathname === '/api/devices') {
+    return devices.report(url.searchParams.has('scan'))
+      .then((r) => send(res, 200, 'application/json', JSON.stringify(r)))
+      .catch(() => send(res, 500, 'text/plain', 'Scan failed'));
+  }
   if (url.pathname === '/api/drops') return send(res, 200, 'application/json', JSON.stringify(dropReport()));
   if (url.pathname === '/api/status') return send(res, 200, 'application/json', JSON.stringify(status(req)));
   if (url.pathname === '/api/ping') return send(res, 200, 'text/plain', 'ok');
@@ -230,6 +236,7 @@ buildHelper();
 startHelper();
 setInterval(touchAlive, 5000).unref();
 sample();
+devices.start();
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`\nSignal is running.\n  On this Mac:  http://localhost:${PORT}`);
   const ip = lanAddress();

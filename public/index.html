@@ -59,6 +59,32 @@ button:disabled{opacity:.6;cursor:default}
 button:focus-visible{outline:3px solid var(--c);outline-offset:2px}
 #spark{display:block;width:100%;height:90px;margin-top:12px}
 .note{font-size:13px;line-height:1.4;color:var(--dim);margin-top:12px}
+.tabs{display:flex;gap:6px;padding:5px;margin:16px auto 0;width:max-content;max-width:100%;border-radius:99px;background:var(--card);border:1px solid var(--line)}
+.tabs button{width:auto;margin:0;min-height:40px;padding:0 22px;font-size:15px;border-radius:99px;background:transparent;color:var(--dim)}
+.tabs button[aria-selected="true"]{background:#fff;color:#000}
+.devHead{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;margin:28px 0 14px}
+.devNum{font-size:clamp(84px,24vw,150px);font-weight:900;letter-spacing:-.05em;line-height:1;font-variant-numeric:tabular-nums;text-shadow:0 0 34px rgba(160,145,255,.55)}
+button.ghost{width:auto;flex:none;padding:0 22px;margin:0;background:transparent;color:#fff;border:1px solid var(--line)}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px}
+.chips span{padding:8px 14px;border-radius:99px;background:var(--card);border:1px solid var(--line);font-size:14px;font-weight:700}
+.chips b{font-weight:900;margin-right:4px}
+.devices{width:100%;border-collapse:collapse;font-size:15px}
+.devices th{text-align:left;font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--dim);padding:0 10px 10px}
+.devices td{padding:12px 10px;border-top:1px solid var(--line);vertical-align:middle}
+.devices .dev{display:flex;align-items:center;gap:12px;font-weight:800;min-width:0}
+.devices .dev em{font-style:normal;font-size:22px;flex:none}
+.devices .dev small{display:block;font-weight:500;font-size:13px;color:var(--dim)}
+.devices .mono{font-variant-numeric:tabular-nums}
+.devices tr.offline{opacity:.45}
+.status{display:inline-flex;align-items:center;gap:6px;font-weight:700}
+.status::before{content:"";width:8px;height:8px;border-radius:50%;background:currentColor}
+@media(max-width:720px){
+  .devices thead{display:none}
+  .devices tr{display:grid;grid-template-columns:1fr 1fr;gap:6px 12px;padding:14px 0;border-top:1px solid var(--line)}
+  .devices td{border:0;padding:0;font-size:14px}
+  .devices td:first-child{grid-column:1/-1}
+  .devices td[data-label]:not(:first-child)::before{content:attr(data-label);display:block;font-size:12px;color:var(--dim);font-weight:600}
+}
 .events{list-style:none;padding:0;margin-top:16px;display:grid;gap:8px}
 .events li{display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:14px;background:rgba(255,255,255,.04);border:1px solid var(--line);font-size:15px}
 .events time{font-weight:800;font-variant-numeric:tabular-nums;min-width:52px}
@@ -78,6 +104,13 @@ button:focus-visible{outline:3px solid var(--c);outline-offset:2px}
     <div class="net"><small id="netLabel">Connected to</small><b id="ssid">Searching…</b></div>
     <div class="pill" id="pill">Live</div>
   </header>
+
+  <nav class="tabs" role="tablist">
+    <button role="tab" id="tabBtnSignal" aria-selected="true">Signal</button>
+    <button role="tab" id="tabBtnDevices" aria-selected="false">Devices</button>
+  </nav>
+
+  <div id="tabSignal">
 
   <section class="hero" aria-live="polite">
     <div class="orb"><canvas id="orb" aria-hidden="true"></canvas><div class="num"><span id="num">--</span><sup>%</sup></div></div>
@@ -125,6 +158,26 @@ button:focus-visible{outline:3px solid var(--c);outline-offset:2px}
       <button id="go">Run speed test</button>
     </section>
   </div>
+  </div>
+
+  <section id="tabDevices" hidden>
+    <div class="devHead">
+      <div>
+        <div class="label" id="devNet">Devices on this network</div>
+        <div class="devNum" id="devCount">--</div>
+        <p class="sub" id="devSay">Scanning your network…</p>
+      </div>
+      <button class="ghost" id="scan">Scan now</button>
+    </div>
+    <div class="chips" id="devChips"></div>
+    <div class="card">
+      <table class="devices">
+        <thead><tr><th>Device</th><th>Type</th><th>IP address</th><th>Maker</th><th>Status</th><th>Data use</th></tr></thead>
+        <tbody id="devRows"></tbody>
+      </table>
+      <p class="note" id="devNote">Data use is shown for this Mac only. Other devices' traffic goes straight to the router, so only the router can measure it.</p>
+    </div>
+  </section>
 </main>
 
 <script>
@@ -579,6 +632,70 @@ async function poll() {
   setTimeout(poll, 1000);
 }
 poll();
+/* ---------- Devices tab ---------- */
+const ICONS = { Router: '📡', Computer: '💻', Phone: '📱', Tablet: '📱', 'Phone or tablet': '📱', TV: '📺', Printer: '🖨️', Speaker: '🔊', 'Smart home': '🏠', Unknown: '❔' };
+let devTimer = null;
+function showTab(name) {
+  const devicesOn = name === 'devices';
+  $('tabSignal').hidden = devicesOn;
+  $('tabDevices').hidden = !devicesOn;
+  $('tabBtnSignal').setAttribute('aria-selected', String(!devicesOn));
+  $('tabBtnDevices').setAttribute('aria-selected', String(devicesOn));
+  try { localStorage.setItem('signal-tab', name); } catch {}
+  clearInterval(devTimer);
+  if (devicesOn) { loadDevices(false); devTimer = setInterval(() => loadDevices(false), 5000); }
+}
+$('tabBtnSignal').onclick = () => showTab('signal');
+$('tabBtnDevices').onclick = () => showTab('devices');
+$('scan').onclick = () => loadDevices(true);
+
+function seen(ms) {
+  const m = Math.round((Date.now() - ms) / 60000);
+  return m < 60 ? `${m} min ago` : m < 1440 ? `${Math.round(m / 60)} h ago` : `${Math.round(m / 1440)} d ago`;
+}
+
+async function loadDevices(fresh) {
+  if (source === null) return;
+  if (source === 'browser') {
+    $('devCount').textContent = '--';
+    $('devSay').textContent = 'Device scanning needs Signal running on your Mac. Open this page on the Mac, or on your phone at the Mac\'s local address.';
+    $('devRows').innerHTML = ''; $('devChips').innerHTML = ''; $('scan').hidden = true;
+    return;
+  }
+  if (fresh) { $('scan').disabled = true; $('scan').textContent = 'Scanning…'; }
+  try {
+    const r = await (await fetch(source + '/api/devices' + (fresh ? '?scan' : ''), { cache: 'no-store' })).json();
+    renderDevices(r);
+  } catch { $('devSay').textContent = 'Could not reach the Mac to scan.'; }
+  $('scan').disabled = false; $('scan').textContent = 'Scan now';
+}
+
+function renderDevices(r) {
+  const list = r.devices || [];
+  const connected = list.filter((d) => d.status !== 'offline');
+  $('devCount').textContent = connected.length;
+  $('devNet').textContent = `Devices on ${$('ssid').textContent || 'this network'}`;
+  const offline = list.length - connected.length;
+  $('devSay').textContent = `Connected right now${offline ? `, plus ${offline} seen earlier this week` : ''}. Last scan ${new Date(r.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}.` +
+    (connected.length <= 2 ? ' This network may hide devices from each other, which is common on public Wi-Fi.' : '');
+  const counts = {};
+  for (const d of connected) counts[d.type] = (counts[d.type] || 0) + 1;
+  $('devChips').innerHTML = Object.entries(counts).sort((a, b) => b[1] - a[1])
+    .map(([t, n]) => `<span>${ICONS[t] || '❔'} <b>${n}</b>${esc(t)}</span>`).join('');
+  $('devRows').innerHTML = list.map((d) => {
+    const status = d.status === 'online' ? ['Online', '#4ade80'] : d.status === 'idle' ? ['Idle', '#fbbf24'] : [`Seen ${seen(d.lastSeen)}`, 'var(--dim)'];
+    const use = d.isSelf ? `↓ ${r.self.downMbps} · ↑ ${r.self.upMbps} Mbps` : 'Router only';
+    const title = d.isSelf ? `${d.name || 'This Mac'} (this Mac)` : d.name || d.model || (d.vendor && d.vendor !== 'Private address' ? `${d.vendor} device` : 'Unnamed device');
+    return `<tr class="${d.status === 'offline' ? 'offline' : ''}">
+      <td><div class="dev"><em>${ICONS[d.type] || '❔'}</em><div>${esc(title)}<small>${esc(d.model && d.model !== title ? d.model : d.mac || '')}</small></div></div></td>
+      <td data-label="Type">${esc(d.type)}</td>
+      <td data-label="IP address" class="mono">${esc(d.ip)}</td>
+      <td data-label="Maker">${esc(d.vendor || '--')}</td>
+      <td data-label="Status"><span class="status" style="color:${status[1]}">${status[0]}</span></td>
+      <td data-label="Data use" class="mono">${use}</td></tr>`;
+  }).join('');
+}
+
 /* ---------- Drop recorder ---------- */
 const CAUSES = {
   wifi: { label: 'Wi-Fi lost', color: '#f87171' },
@@ -670,6 +787,11 @@ $('go').onclick = async () => {
   }
   b.disabled = false;
 };
+
+/* Reopen the last tab once everything above is defined. */
+let savedTab = null;
+try { savedTab = localStorage.getItem('signal-tab'); } catch {}
+if (location.hash === '#devices' || (savedTab === 'devices' && location.hash !== '#signal')) showTab('devices');
 </script>
 </body>
 </html>
